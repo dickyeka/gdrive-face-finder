@@ -127,3 +127,10 @@ class BaseFaceEngine(ABC):
     ) -> float:
         """Calculate mathematical distance (lower means more similar)."""
         pass
+
+    def compute_similarity(
+        self, encoding1: List[float], encoding2: List[float]
+    ) -> float:
+        """Calculate similarity score (0.0 to 1.0, higher means more similar)."""
+        d = self.compute_distance(encoding1, encoding2)
+        return max(0.0, 1.0 - d)

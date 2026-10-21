@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Google Drive Face Finder — AI Photo Album Search</title>
+  <title>Google Drive Face Finder — Deep AI Photo Search</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
   <style>
     body {
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -20,18 +20,20 @@
   <header class="border-b border-slate-800/80 bg-slate-900/40 backdrop-blur-md sticky top-0 z-40">
     <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
           <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
         <div>
           <span class="font-bold text-base tracking-tight text-white">Drive Face Finder</span>
-          <span class="text-[11px] ml-2 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">YuNet + SFace</span>
+          <span id="engineBadge" class="text-[11px] ml-2 px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
+            YuNet + ArcFace 512-d
+          </span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs text-slate-400">
-        <span class="hidden sm:inline">100% Local AI Face Vector Matching</span>
+        <span class="hidden sm:inline">Google Photos-Grade Deep Embeddings</span>
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         <span class="text-emerald-400 font-medium">Ready</span>
       </div>
@@ -44,10 +46,10 @@
     <!-- Hero Section -->
     <div class="text-center max-w-2xl mx-auto space-y-2">
       <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-        Find Your Photos in Any <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">Google Drive Album</span>
+        Find Your Photos in Any <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-300">Google Drive Album</span>
       </h1>
       <p class="text-sm text-slate-400">
-        Upload a selfie or reference face, paste a public Google Drive folder URL, and our local deep vision engine will scan every photo to locate all of your action shots.
+        Upload 1 to 5 reference photos (front, side angle, action), paste a public Google Drive album link, and our local 512-d deep vision engine will pinpoint all of your photos.
       </p>
     </div>
 
@@ -57,30 +59,42 @@
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           
-          <!-- Column 1: Reference Photo Upload -->
+          <!-- Column 1: Multi-Photo Reference Upload -->
           <div class="space-y-2">
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              1. Your Reference Photo
-            </label>
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                1. Reference Photos (<span id="photoCountLabel">0</span> Selected)
+              </label>
+              <span class="text-[11px] text-blue-400">Multi-Angle Supported</span>
+            </div>
+            
+            <!-- Upload Dropzone -->
             <div id="dropzone" 
                  onclick="document.getElementById('refInput').click()" 
-                 class="relative border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-2xl h-48 flex flex-col items-center justify-center cursor-pointer transition-all bg-slate-950/40 hover:bg-slate-900/80 group overflow-hidden">
-              <input type="file" id="refInput" name="reference_image" accept="image/*" class="hidden" onchange="previewImage(event)" required />
+                 class="relative border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-2xl min-h-[190px] flex flex-col items-center justify-center cursor-pointer transition-all bg-slate-950/40 hover:bg-slate-900/80 p-4">
               
+              <input type="file" id="refInput" name="reference_images" accept="image/*" multiple class="hidden" onchange="handleFileSelect(event)" />
+              
+              <!-- Empty Prompt -->
               <div id="uploadPrompt" class="text-center p-4 space-y-2">
                 <div class="w-10 h-10 rounded-full bg-slate-800 group-hover:bg-blue-600/20 text-slate-400 group-hover:text-blue-400 mx-auto flex items-center justify-center transition-colors">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                 </div>
-                <p class="text-xs font-semibold text-slate-300 group-hover:text-white">Click or drag & drop reference photo</p>
-                <p class="text-[11px] text-slate-500">Supports JPG, PNG (clear view of your face)</p>
+                <p class="text-xs font-semibold text-slate-300">Click or drag & drop reference photos</p>
+                <p class="text-[11px] text-slate-500">Select 1 to 5 photos (portrait, profile, sports/action)</p>
               </div>
 
-              <!-- Preview Image -->
-              <img id="imagePreview" src="" alt="Reference Preview" class="hidden absolute inset-0 w-full h-full object-contain p-2 bg-slate-950/90 rounded-2xl" />
-              <button type="button" id="removePhotoBtn" onclick="clearPhoto(event)" class="hidden absolute top-3 right-3 p-1.5 rounded-lg bg-black/60 text-white hover:bg-red-600 transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-              </button>
+              <!-- Multi-Image Thumbnails Tray -->
+              <div id="thumbnailsTray" class="hidden w-full grid grid-cols-3 sm:grid-cols-4 gap-2.5 z-10">
+                <!-- Injected via JavaScript -->
+              </div>
             </div>
+
+            <!-- Pro Tip Note -->
+            <p class="text-[11px] text-slate-400 flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-blue-400 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+              <span>Tip: Uploading 2–4 photos (e.g. front + side profile) dramatically boosts action shot accuracy.</span>
+            </p>
           </div>
 
           <!-- Column 2: Drive URL & Settings -->
@@ -98,19 +112,19 @@
               <p class="text-[11px] text-slate-500">Make sure the folder sharing is set to "Anyone with the link can view".</p>
             </div>
 
-            <!-- Matching Tolerance Slider -->
+            <!-- ArcFace Cosine Sensitivity Slider -->
             <div class="space-y-2 bg-slate-950/40 p-3.5 rounded-xl border border-slate-800">
               <div class="flex items-center justify-between text-xs">
-                <span class="font-medium text-slate-300">Matching Tolerance (Sensitivity)</span>
-                <span id="toleranceLabel" class="font-mono text-blue-400 font-semibold">1.05 (Balanced)</span>
+                <span class="font-medium text-slate-300">Matching Sensitivity (ArcFace Cosine)</span>
+                <span id="toleranceLabel" class="font-mono text-blue-400 font-semibold">0.48 (Balanced)</span>
               </div>
-              <input type="range" id="thresholdSlider" name="threshold" min="0.75" max="1.25" step="0.05" value="1.05"
+              <input type="range" id="thresholdSlider" name="threshold" min="0.38" max="0.62" step="0.02" value="0.48"
                      oninput="updateToleranceLabel(this.value)"
                      class="w-full accent-blue-500 cursor-pointer h-1.5 bg-slate-700 rounded-lg" />
               <div class="flex justify-between text-[10px] text-slate-500 font-medium">
-                <span>0.75 (Strict)</span>
-                <span>1.05 (Standard)</span>
-                <span>1.25 (Loose)</span>
+                <span>0.38 (High Recall)</span>
+                <span>0.48 (Balanced — Recommended)</span>
+                <span>0.62 (Strict)</span>
               </div>
             </div>
 
@@ -213,42 +227,136 @@
     let eventSource = null;
     let currentMatches = [];
     let currentLightboxIdx = 0;
+    let selectedFiles = []; // Array of File objects
+
+    // Initialize engine parameters from backend
+    async function loadEngineInfo() {
+      try {
+        const res = await fetch('/api/info');
+        const data = await res.json();
+        if (data.is_arcface) {
+          document.getElementById('engineBadge').textContent = 'YuNet + ArcFace 512-d (Google Photos-grade)';
+          const slider = document.getElementById('thresholdSlider');
+          slider.min = data.min_threshold;
+          slider.max = data.max_threshold;
+          slider.step = "0.02";
+          slider.value = data.default_threshold;
+          updateToleranceLabel(data.default_threshold);
+        }
+      } catch (e) {
+        console.warn('Could not load engine info:', e);
+      }
+    }
+    loadEngineInfo();
 
     function updateToleranceLabel(val) {
-      let desc = "(Balanced)";
-      if (val < 0.9) desc = "(Strict)";
-      else if (val > 1.1) desc = "(Loose)";
-      document.getElementById('toleranceLabel').textContent = `${parseFloat(val).toFixed(2)} ${desc}`;
+      const v = parseFloat(val);
+      let desc = "(Balanced — Recommended)";
+      if (v < 0.44) desc = "(High Recall — Catches Distant Faces)";
+      else if (v > 0.54) desc = "(Strict — Studio Precision)";
+      document.getElementById('toleranceLabel').textContent = `${v.toFixed(2)} ${desc}`;
     }
 
-    function previewImage(event) {
-      const file = event.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          document.getElementById('imagePreview').src = e.target.result;
-          document.getElementById('imagePreview').classList.remove('hidden');
-          document.getElementById('uploadPrompt').classList.add('hidden');
-          document.getElementById('removePhotoBtn').classList.remove('hidden');
+    function handleFileSelect(event) {
+      const files = Array.from(event.target.files);
+      if (!files.length) return;
+
+      // Add to selected files (limit to 5 total)
+      for (const f of files) {
+        if (selectedFiles.length >= 5) break;
+        selectedFiles.push(f);
+      }
+      renderSelectedThumbnails();
+    }
+
+    function removeFile(index, event) {
+      if (event) event.stopPropagation();
+      selectedFiles.splice(index, 1);
+      renderSelectedThumbnails();
+    }
+
+    function renderSelectedThumbnails() {
+      const tray = document.getElementById('thumbnailsTray');
+      const prompt = document.getElementById('uploadPrompt');
+      const countLabel = document.getElementById('photoCountLabel');
+      
+      countLabel.textContent = selectedFiles.length;
+      tray.innerHTML = '';
+
+      if (selectedFiles.length === 0) {
+        tray.classList.add('hidden');
+        prompt.classList.remove('hidden');
+        return;
+      }
+
+      prompt.classList.add('hidden');
+      tray.classList.remove('hidden');
+
+      selectedFiles.forEach((file, idx) => {
+        const card = document.createElement('div');
+        card.className = "relative aspect-square rounded-xl bg-slate-900 border border-slate-700/80 overflow-hidden group shadow-md";
+        
+        const img = document.createElement('img');
+        img.className = "w-full h-full object-cover";
+        img.src = URL.createObjectURL(file);
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.type = "button";
+        removeBtn.className = "absolute top-1.5 right-1.5 p-1 rounded-md bg-black/70 text-white hover:bg-red-600 transition-colors";
+        removeBtn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>`;
+        removeBtn.onclick = (e) => removeFile(idx, e);
+
+        card.appendChild(img);
+        card.appendChild(removeBtn);
+        tray.appendChild(card);
+      });
+
+      // If under limit, append an "Add More" tile
+      if (selectedFiles.length < 5) {
+        const addCard = document.createElement('div');
+        addCard.className = "aspect-square rounded-xl border border-dashed border-slate-700 hover:border-blue-500 bg-slate-900/40 hover:bg-slate-900 flex flex-col items-center justify-center cursor-pointer transition-colors text-slate-400 hover:text-white";
+        addCard.onclick = (e) => {
+          e.stopPropagation();
+          document.getElementById('refInput').click();
         };
-        reader.readAsDataURL(file);
+        addCard.innerHTML = `
+          <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          <span class="text-[10px] font-medium">+ Add Photo</span>
+        `;
+        tray.appendChild(addCard);
       }
     }
 
-    function clearPhoto(event) {
-      event.stopPropagation();
-      document.getElementById('refInput').value = "";
-      document.getElementById('imagePreview').src = "";
-      document.getElementById('imagePreview').classList.add('hidden');
-      document.getElementById('uploadPrompt').classList.remove('hidden');
-      document.getElementById('removePhotoBtn').classList.add('hidden');
-    }
+    // Drag and drop support
+    const dropzone = document.getElementById('dropzone');
+    ['dragenter', 'dragover'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
+        e.preventDefault();
+        dropzone.classList.add('border-blue-500', 'bg-slate-900/90');
+      });
+    });
+    ['dragleave', 'drop'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('border-blue-500', 'bg-slate-900/90');
+      });
+    });
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer && e.dataTransfer.files) {
+        const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+        for (const f of files) {
+          if (selectedFiles.length >= 5) break;
+          selectedFiles.push(f);
+        }
+        renderSelectedThumbnails();
+      }
+    });
 
     async function handleScanSubmit(event) {
       event.preventDefault();
       
       const folderUrlInput = document.getElementById('folderUrl');
-      const refInput = document.getElementById('refInput');
       const thresholdSlider = document.getElementById('thresholdSlider');
       
       const folderUrl = folderUrlInput.value.trim();
@@ -258,20 +366,24 @@
         return;
       }
       
-      if (!refInput.files || refInput.files.length === 0) {
-        alert('Please select or upload a reference face photo.');
+      if (selectedFiles.length === 0) {
+        alert('Please select or upload at least one reference photo.');
         return;
       }
       
       const formData = new FormData();
       formData.append('folder_url', folderUrl);
-      formData.append('reference_image', refInput.files[0]);
       formData.append('threshold', thresholdSlider.value);
+      
+      // Append all selected reference photos
+      selectedFiles.forEach((file) => {
+        formData.append('reference_images', file);
+      });
       
       const submitBtn = document.getElementById('submitBtn');
       submitBtn.disabled = true;
       submitBtn.classList.add('opacity-75');
-      submitBtn.innerHTML = `<span class="animate-spin mr-2">⚙</span> Starting AI Scanner...`;
+      submitBtn.innerHTML = `<span class="animate-spin mr-2">⚙</span> Starting ArcFace 512-d Scanner...`;
       
       document.getElementById('progressSection').classList.remove('hidden');
       document.getElementById('resultsSection').classList.add('hidden');
@@ -334,7 +446,7 @@
       currentMatches = data.matches || [];
       
       document.getElementById('resultsHeading').textContent = `${currentMatches.length} Matching Photos Found`;
-      document.getElementById('resultsSubheading').textContent = `Scanned ${data.total_photos} photos using calibrated facial distance matching.`;
+      document.getElementById('resultsSubheading').textContent = `Scanned ${data.total_photos} photos using ArcFace 512-d deep representations.`;
       document.getElementById('downloadZipBtn').href = `/api/download-zip/${jobId}`;
       
       renderGrid(currentMatches);
@@ -347,20 +459,33 @@
       grid.innerHTML = '';
       
       if (matches.length === 0) {
-        grid.innerHTML = `<div class="col-span-full text-center py-12 text-slate-500">No matching photos found within the selected threshold. Try slightly increasing the sensitivity slider.</div>`;
+        grid.innerHTML = `<div class="col-span-full text-center py-12 text-slate-500">No matching photos found within the selected sensitivity threshold. Try slightly lowering the sensitivity slider (e.g. 0.42).</div>`;
         return;
       }
       
       matches.forEach((m, idx) => {
-        const badgeColor = m.min_distance < 0.85 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+        let badgeColor = 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+        let badgeText = 'Likely Match';
+        if (m.similarity_score >= 0.58 || m.similarity_pct >= 80) {
+          badgeColor = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+          badgeText = 'High Confidence';
+        } else if (m.similarity_score >= 0.48 || m.similarity_pct >= 55) {
+          badgeColor = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
+          badgeText = 'Confirmed Match';
+        }
+
         const card = document.createElement('div');
         card.className = "group relative rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-lg hover:shadow-2xl transition-all cursor-pointer flex flex-col";
         card.onclick = () => openLightbox(idx);
         card.innerHTML = `
           <div class="aspect-[4/3] w-full overflow-hidden bg-black/40 relative">
             <img src="${m.preview_url}" alt="${m.filename}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-            <div class="absolute top-3 left-3 px-2 py-0.5 rounded-md text-[11px] font-semibold backdrop-blur-md border ${badgeColor}">
-              ${m.similarity_pct}% Match (Dist: ${m.min_distance.toFixed(3)})
+            <div class="absolute top-3 left-3 px-2.5 py-1 rounded-md text-[11px] font-semibold backdrop-blur-md border ${badgeColor} flex items-center gap-1.5 shadow-md">
+              <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+              <span>${m.similarity_pct}% (${badgeText})</span>
+            </div>
+            <div class="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[10px] font-mono bg-black/60 text-slate-300 backdrop-blur-sm">
+              Sim: ${m.similarity_score.toFixed(3)}
             </div>
           </div>
           <div class="p-4 flex items-center justify-between mt-auto">
@@ -396,7 +521,7 @@
       const m = currentMatches[currentLightboxIdx];
       document.getElementById('lightboxImg').src = m.preview_url;
       document.getElementById('lightboxTitle').textContent = m.filename;
-      document.getElementById('lightboxMeta').textContent = `Match Score: ${m.similarity_pct}% (Distance: ${m.min_distance.toFixed(3)}) • Photo ${index + 1} of ${currentMatches.length}`;
+      document.getElementById('lightboxMeta').textContent = `Match Confidence: ${m.similarity_pct}% (ArcFace Sim: ${m.similarity_score.toFixed(3)}) • Photo ${index + 1} of ${currentMatches.length}`;
       document.getElementById('lightboxDriveLink').href = m.drive_view_url;
       document.getElementById('lightboxDownloadLink').href = m.drive_download_url;
       document.getElementById('lightbox').classList.remove('hidden');

@@ -18,12 +18,13 @@ It operates both as a **Modern Web Application** (with live progress tracking, i
 
 ## Key Features
 
-* **Instant Web Interface:** Upload a reference selfie, paste a Google Drive folder link, and hit Scan.
-* **100% Local & Private:** Runs natively on your CPU/Apple Silicon using OpenCV deep learning models (YuNet + SFace). No biometric data or images are ever uploaded to cloud LLMs.
+* **Instant Web Interface:** Upload 1 to 5 reference photos (different angles, lighting, action shots), paste a Google Drive folder link, and hit Scan.
+* **Google Photos-Grade Accuracy (ArcFace 512-d):** Upgraded to InsightFace ArcFace 512-dimensional deep normalized embeddings (`w600k_mbf.onnx`) and YuNet landmark detection, separating true matches from impostors with massive cosine discrimination.
+* **Multi-Photo Reference Pooling:** Upload portrait, side profile, and sports/action photos. The engine computes maximum cosine similarity across all reference vectors, dramatically improving recall on tough action poses.
+* **100% Local & Private:** Runs natively on your CPU/Apple Silicon using OpenCV deep learning ONNX models. No biometric data or images are ever uploaded to cloud LLMs or third parties.
 * **Dual Operation Modes:**
   * **Interactive Web App:** Real-time Server-Sent Events (SSE) progress bar, lightbox photo viewer, similarity scores, and 1-click batch ZIP downloads.
   * **Model Context Protocol (MCP) Server:** Allows AI coding assistants (Claude, Cursor, Antigravity) to autonomously detect, register, match, and cluster faces across file systems.
-* **Smart Face Matching:** Converts faces into 128-dimensional mathematical feature vectors and computes Euclidean L2 distance for high-precision recognition even in motion and sports photography.
 
 ---
 

@@ -7,9 +7,11 @@ from .base import BaseFaceEngine, DetectedFace, FaceBoundingBox
 
 class OpenCVEngine(BaseFaceEngine):
     """
-    Modern face detection and recognition engine using OpenCV's built-in
-    YuNet (detection) and SFace (128-d deep facial embeddings).
-    Runs with full hardware acceleration on Apple Silicon / CPU without CMake.
+    Modern high-precision face detection and recognition engine using:
+    - YuNet: Ultra-fast ONNX face detection with 5-point facial landmark alignment
+    - ArcFace 512-d (w600k_mbf.onnx): InsightFace deep representation network
+      yielding state-of-the-art discrimination comparable to Google Photos People.
+    - SFace 128-d: Built-in fallback if ArcFace weights are unavailable.
     """
 
     def __init__(self):
@@ -18,6 +20,8 @@ class OpenCVEngine(BaseFaceEngine):
         self._loaded = False
         self._detector = None
         self._recognizer = None
+        self._arcface_net = None
+        self._has_arcface = False
         self._check_library()
 
     def _check_library(self):
@@ -30,14 +34,15 @@ class OpenCVEngine(BaseFaceEngine):
             models_dir = Path(__file__).parent.parent / "models"
             yunet_model = models_dir / "face_detection_yunet_2023mar.onnx"
             sface_model = models_dir / "face_recognition_sface_2021dec.onnx"
+            arcface_model = models_dir / "w600k_mbf.onnx"
 
             if yunet_model.is_file() and sface_model.is_file():
-                # Initialize YuNet detector with initial placeholder input size
+                # Score threshold 0.5 allows detection of smaller action/sports faces
                 self._detector = cv2.FaceDetectorYN.create(
                     str(yunet_model),
                     "",
                     (320, 320),
-                    score_threshold=0.6,
+                    score_threshold=0.5,
                     nms_threshold=0.3,
                     top_k=5000,
                 )
@@ -45,6 +50,16 @@ class OpenCVEngine(BaseFaceEngine):
                     str(sface_model),
                     "",
                 )
+
+                # Check and load ArcFace 512-d ONNX
+                if arcface_model.is_file():
+                    try:
+                        self._arcface_net = cv2.dnn.readNetFromONNX(str(arcface_model))
+                        self._has_arcface = True
+                    except Exception:
+                        self._arcface_net = None
+                        self._has_arcface = False
+
                 self._loaded = True
         except Exception:
             self._cv2 = None
@@ -52,7 +67,13 @@ class OpenCVEngine(BaseFaceEngine):
             self._loaded = False
 
     @property
+    def is_arcface_enabled(self) -> bool:
+        return self._has_arcface and (self._arcface_net is not None)
+
+    @property
     def name(self) -> str:
+        if self.is_arcface_enabled:
+            return "opencv (YuNet + ArcFace 512-d)"
         return "opencv (YuNet + SFace ONNX)"
 
     def is_available(self) -> bool:
@@ -133,9 +154,27 @@ class OpenCVEngine(BaseFaceEngine):
                 landmarks=landmarks,
             )
 
-            # Align face crop and compute 128-d feature vector
+            # Canonical 112x112 affine alignment using YuNet 5 landmarks
             aligned_face = self._recognizer.alignCrop(img, face)
-            feature_vector = self._recognizer.feature(aligned_face)[0].tolist()
+
+            if self.is_arcface_enabled:
+                # ArcFace 512-d normalized embedding
+                blob = self._cv2.dnn.blobFromImage(
+                    aligned_face,
+                    1.0 / 127.5,
+                    (112, 112),
+                    (127.5, 127.5, 127.5),
+                    swapRB=True,
+                )
+                self._arcface_net.setInput(blob)
+                feat = self._arcface_net.forward()[0]
+                norm = float(np.linalg.norm(feat))
+                if norm > 1e-6:
+                    feat = feat / norm
+                feature_vector = feat.tolist()
+            else:
+                # SFace 128-d fallback
+                feature_vector = self._recognizer.feature(aligned_face)[0].tolist()
 
             results.append((face_meta, feature_vector))
 
@@ -144,8 +183,32 @@ class OpenCVEngine(BaseFaceEngine):
     def compute_distance(
         self, encoding1: List[float], encoding2: List[float]
     ) -> float:
-        """Calculate L2 distance between SFace 128-d embeddings (lower means more similar)."""
+        """
+        Calculate mathematical distance:
+        - For 512-d ArcFace: Cosine distance = max(0.0, 1.0 - CosineSimilarity)
+        - For 128-d SFace: L2 Norm distance
+        """
+        if len(encoding1) == 512 and len(encoding2) == 512:
+            v1 = np.array(encoding1, dtype=np.float32)
+            v2 = np.array(encoding2, dtype=np.float32)
+            sim = float(np.dot(v1, v2))
+            return max(0.0, 1.0 - sim)
+
         v1 = np.array(encoding1, dtype=np.float32).reshape(1, -1)
         v2 = np.array(encoding2, dtype=np.float32).reshape(1, -1)
         dist = self._recognizer.match(v1, v2, self._cv2.FaceRecognizerSF_FR_NORM_L2)
         return float(dist)
+
+    def compute_similarity(
+        self, encoding1: List[float], encoding2: List[float]
+    ) -> float:
+        """
+        Calculate cosine or normalized similarity score (0.0 to 1.0).
+        """
+        if len(encoding1) == 512 and len(encoding2) == 512:
+            v1 = np.array(encoding1, dtype=np.float32)
+            v2 = np.array(encoding2, dtype=np.float32)
+            return float(np.dot(v1, v2))
+
+        d = self.compute_distance(encoding1, encoding2)
+        return max(0.0, 1.0 - (d / 1.35))

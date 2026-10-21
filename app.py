@@ -46,27 +46,39 @@ def extract_folder_id(url: str) -> str:
     return clean
 
 
-def run_scan_job(job_id: str, folder_url: str, ref_img_bytes: bytes, threshold: float):
+def run_scan_job(job_id: str, folder_url: str, ref_images_bytes: List[bytes], threshold: float):
     job = JOBS[job_id]
     job_dir = DATA_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
     
     try:
-        # Save reference image
-        ref_path = job_dir / "reference.jpg"
-        ref_path.write_bytes(ref_img_bytes)
-        
+        ref_dir = job_dir / "references"
+        ref_dir.mkdir(parents=True, exist_ok=True)
+
         job["status"] = "detecting_reference"
-        job["message"] = "Detecting face in reference photo..."
-        
-        ref_faces = engine.extract_encodings(str(ref_path))
-        if not ref_faces:
+        job["message"] = f"Extracting deep face representations from {len(ref_images_bytes)} reference photo(s)..."
+
+        ref_encodings: List[List[float]] = []
+        for idx, r_bytes in enumerate(ref_images_bytes):
+            ref_path = ref_dir / f"reference_{idx}.jpg"
+            ref_path.write_bytes(r_bytes)
+            try:
+                faces = engine.extract_encodings(str(ref_path))
+                for fmeta, enc in faces:
+                    ref_encodings.append(enc)
+            except Exception:
+                continue
+
+        if not ref_encodings:
             job["status"] = "error"
-            job["error"] = "No face could be detected in the uploaded reference photo. Please upload a clear photo with a visible face."
+            job["error"] = "No face could be detected in any of the uploaded reference photos. Please upload clear photos with visible faces."
             return
-            
-        ref_meta, ref_enc = ref_faces[0]
+
+        is_arcface = getattr(engine, "is_arcface_enabled", False)
         job["ref_detected"] = True
+        job["ref_count"] = len(ref_images_bytes)
+        job["ref_faces_count"] = len(ref_encodings)
+        job["engine_name"] = engine.name
         
         # Discover Drive files
         job["status"] = "fetching_drive"
@@ -83,7 +95,7 @@ def run_scan_job(job_id: str, folder_url: str, ref_img_bytes: bytes, threshold: 
             
         job["total_photos"] = len(img_files)
         job["status"] = "scanning"
-        job["message"] = f"Found {len(img_files)} photos. Scanning album..."
+        job["message"] = f"Found {len(img_files)} photos. Scanning album with {engine.name}..."
         
         photos_dir = job_dir / "photos"
         photos_dir.mkdir(parents=True, exist_ok=True)
@@ -117,22 +129,37 @@ def run_scan_job(job_id: str, folder_url: str, ref_img_bytes: bytes, threshold: 
                 faces = engine.extract_encodings(str(local_path))
             except Exception:
                 continue
-                
+
+            best_sim = -1.0
             min_dist = float("inf")
-            for fmeta, enc in faces:
-                d = engine.compute_distance(ref_enc, enc)
-                if d < min_dist:
-                    min_dist = d
-                    
-            is_match = (min_dist <= threshold)
-            sim_pct = max(0.0, min(100.0, (1.0 - (min_dist / 1.35)) * 100.0))
+
+            if faces:
+                for fmeta, cand_enc in faces:
+                    for ref_enc in ref_encodings:
+                        sim = engine.compute_similarity(ref_enc, cand_enc)
+                        dist = engine.compute_distance(ref_enc, cand_enc)
+                        if sim > best_sim:
+                            best_sim = sim
+                        if dist < min_dist:
+                            min_dist = dist
+
+            # Match criteria
+            if is_arcface:
+                # ArcFace cosine similarity: threshold typically 0.45 - 0.55
+                is_match = (best_sim >= threshold)
+                # Calibrated percentage: [0.25, 0.65] mapped to [0%, 100%]
+                sim_pct = max(0.0, min(100.0, (best_sim - 0.25) / (0.65 - 0.25) * 100.0))
+            else:
+                is_match = (min_dist <= threshold)
+                sim_pct = max(0.0, min(100.0, (1.0 - (min_dist / 1.35)) * 100.0))
             
             item = {
                 "filename": fname,
                 "file_id": fid,
                 "faces_found": len(faces),
+                "similarity_score": round(best_sim, 4) if best_sim >= -0.9 else 0.0,
                 "min_distance": round(min_dist, 4) if min_dist != float("inf") else None,
-                "similarity_pct": round(sim_pct, 1) if min_dist != float("inf") else 0,
+                "similarity_pct": round(sim_pct, 1),
                 "is_match": is_match,
                 "drive_view_url": f"https://drive.google.com/file/d/{fid}/view",
                 "drive_download_url": f"https://drive.usercontent.google.com/download?id={fid}&export=download",
@@ -144,7 +171,8 @@ def run_scan_job(job_id: str, folder_url: str, ref_img_bytes: bytes, threshold: 
                 job["matches_count"] = len(matches)
                 job["latest_match"] = fname
                 
-        matches.sort(key=lambda x: x["min_distance"] if x["min_distance"] is not None else 999)
+        # Sort matches by similarity score descending (highest quality matches first)
+        matches.sort(key=lambda x: x["similarity_score"], reverse=True)
         job["matches"] = matches
         job["all_results"] = all_results
         job["status"] = "completed"
@@ -160,25 +188,55 @@ async def index_page(request):
     return HTMLResponse(html_file.read_text(encoding="utf-8"))
 
 
+async def engine_info_api(request):
+    is_arcface = getattr(engine, "is_arcface_enabled", False)
+    return JSONResponse({
+        "engine": engine.name,
+        "is_arcface": is_arcface,
+        "embedding_size": 512 if is_arcface else 128,
+        "default_threshold": 0.48 if is_arcface else 1.05,
+        "min_threshold": 0.38 if is_arcface else 0.75,
+        "max_threshold": 0.62 if is_arcface else 1.25,
+    })
+
+
 async def start_scan_api(request):
     form = await request.form()
     folder_url = form.get("folder_url", "").strip()
-    ref_file = form.get("reference_image")
-    threshold_str = form.get("threshold", "1.05")
+    
+    # Support multiple reference images
+    ref_files = form.getlist("reference_images")
+    if not ref_files:
+        single_ref = form.get("reference_image")
+        if single_ref and hasattr(single_ref, "read"):
+            ref_files = [single_ref]
+            
+    is_arcface = getattr(engine, "is_arcface_enabled", False)
+    default_thresh_str = "0.48" if is_arcface else "1.05"
+    threshold_str = form.get("threshold", default_thresh_str)
     
     if not folder_url:
         return JSONResponse({"error": "Google Drive Folder URL is required."}, status_code=400)
-    if not ref_file or not hasattr(ref_file, "read"):
-        return JSONResponse({"error": "Reference photo is required."}, status_code=400)
+    if not ref_files:
+        return JSONResponse({"error": "At least one reference photo is required."}, status_code=400)
         
     try:
         threshold = float(threshold_str)
+        # Handle conversion if old threshold (> 1.0) sent to ArcFace
+        if is_arcface and threshold > 1.0:
+            threshold = 0.48
     except ValueError:
-        threshold = 1.05
+        threshold = 0.48 if is_arcface else 1.05
         
-    ref_bytes = await ref_file.read()
-    if len(ref_bytes) == 0:
-        return JSONResponse({"error": "Uploaded file is empty."}, status_code=400)
+    ref_bytes_list: List[bytes] = []
+    for rf in ref_files:
+        if hasattr(rf, "read"):
+            b = await rf.read()
+            if len(b) > 0:
+                ref_bytes_list.append(b)
+                
+    if not ref_bytes_list:
+        return JSONResponse({"error": "Uploaded reference photo(s) are empty."}, status_code=400)
         
     job_id = str(uuid.uuid4())[:8]
     JOBS[job_id] = {
@@ -194,7 +252,11 @@ async def start_scan_api(request):
     }
     
     # Run scan worker in background thread
-    threading.Thread(target=run_scan_job, args=(job_id, folder_url, ref_bytes, threshold), daemon=True).start()
+    threading.Thread(
+        target=run_scan_job,
+        args=(job_id, folder_url, ref_bytes_list, threshold),
+        daemon=True
+    ).start()
     
     return JSONResponse({"job_id": job_id, "status": "started"})
 
@@ -279,6 +341,7 @@ async def download_zip_api(request):
 
 routes = [
     Route("/", endpoint=index_page, methods=["GET"]),
+    Route("/api/info", endpoint=engine_info_api, methods=["GET"]),
     Route("/api/scan", endpoint=start_scan_api, methods=["POST"]),
     Route("/api/stream/{job_id}", endpoint=stream_progress_api, methods=["GET"]),
     Route("/api/results/{job_id}", endpoint=get_results_api, methods=["GET"]),

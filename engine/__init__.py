@@ -28,14 +28,14 @@ def get_engine(preferred: str = "auto") -> BaseFaceEngine:
             return engine
         raise RuntimeError("Requested 'opencv' engine is not installed or available.")
 
-    # Auto mode: prioritize dlib if present, then opencv
-    dlib_eng = DlibEngine()
-    if dlib_eng.is_available():
-        return dlib_eng
-
+    # Auto mode: prioritize modern opencv (YuNet + ArcFace) if present
     opencv_eng = OpenCVEngine()
     if opencv_eng.is_available():
         return opencv_eng
+
+    dlib_eng = DlibEngine()
+    if dlib_eng.is_available():
+        return dlib_eng
 
     # Neither available - return placeholder or informative error
     raise RuntimeError(
