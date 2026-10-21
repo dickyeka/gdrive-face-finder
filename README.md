@@ -18,8 +18,9 @@ It operates both as a **Modern Web Application** (with live progress tracking, i
 
 ## Key Features
 
-* **Instant Web Interface:** Upload 1 to 5 reference photos (different angles, lighting, action shots), paste a Google Drive folder link, and hit Scan.
+* **Instant Web Interface & Live Webcam Capture:** Upload 1 to 5 reference photos or use the integrated **Live Biometric Webcam Scanner** with an oval targeting guide to register your face instantly.
 * **Google Photos-Grade Accuracy (ArcFace 512-d):** Upgraded to InsightFace ArcFace 512-dimensional deep normalized embeddings (`w600k_mbf.onnx`) and YuNet landmark detection, separating true matches from impostors with massive cosine discrimination.
+* **Biometric HUD & Landmark Overlay:** Displays real-time biometric bounding boxes and 5-point facial landmark reticles (left/right eyes, nose tip, mouth corners) with Interpupillary Distance (IPD in px), roll angle tilt, and confidence metrics directly on gallery cards and in the full-screen lightbox.
 * **Multi-Photo Reference Pooling:** Upload portrait, side profile, and sports/action photos. The engine computes maximum cosine similarity across all reference vectors, dramatically improving recall on tough action poses.
 * **100% Local & Private:** Runs natively on your CPU/Apple Silicon using OpenCV deep learning ONNX models. No biometric data or images are ever uploaded to cloud LLMs or third parties.
 * **Dual Operation Modes:**

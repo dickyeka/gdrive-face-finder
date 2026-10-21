@@ -5,11 +5,13 @@ import uuid
 import time
 import zipfile
 import io
+import math
 import asyncio
 import threading
 import urllib.request
 from pathlib import Path
 from typing import Dict, Any, List
+import cv2
 
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, HTMLResponse, StreamingResponse, FileResponse
@@ -126,22 +128,54 @@ def run_scan_job(job_id: str, folder_url: str, ref_images_bytes: List[bytes], th
                 continue
                 
             try:
+                img_mat = cv2.imread(str(local_path))
+                if img_mat is not None:
+                    img_h, img_w, _ = img_mat.shape
+                else:
+                    img_w, img_h = 1000, 1000
                 faces = engine.extract_encodings(str(local_path))
             except Exception:
                 continue
 
             best_sim = -1.0
             min_dist = float("inf")
+            biometrics_list = []
 
             if faces:
                 for fmeta, cand_enc in faces:
-                    for ref_enc in ref_encodings:
-                        sim = engine.compute_similarity(ref_enc, cand_enc)
-                        dist = engine.compute_distance(ref_enc, cand_enc)
-                        if sim > best_sim:
-                            best_sim = sim
-                        if dist < min_dist:
-                            min_dist = dist
+                    cand_sim = max((engine.compute_similarity(r, cand_enc) for r in ref_encodings), default=0.0)
+                    cand_dist = min((engine.compute_distance(r, cand_enc) for r in ref_encodings), default=float("inf"))
+
+                    if cand_sim > best_sim:
+                        best_sim = cand_sim
+                    if cand_dist < min_dist:
+                        min_dist = cand_dist
+
+                    if is_arcface:
+                        is_cand_match = (cand_sim >= threshold)
+                        cand_pct = max(0.0, min(100.0, (cand_sim - 0.25) / (0.65 - 0.25) * 100.0))
+                    else:
+                        is_cand_match = (cand_dist <= threshold)
+                        cand_pct = max(0.0, min(100.0, (1.0 - (cand_dist / 1.35)) * 100.0))
+
+                    # Biometric landmarks and geometric measurements
+                    b = fmeta.box
+                    lm = fmeta.landmarks or {}
+                    re = lm.get("right_eye", [0, 0])
+                    le = lm.get("left_eye", [0, 0])
+                    ipd = round(math.hypot(le[0] - re[0], le[1] - re[1]), 1)
+                    roll_deg = round(math.degrees(math.atan2(le[1] - re[1], le[0] - re[0])), 1)
+
+                    biometrics_list.append({
+                        "box": b.to_dict(),
+                        "confidence": round(fmeta.confidence, 4),
+                        "landmarks": lm,
+                        "ipd_px": ipd,
+                        "roll_deg": roll_deg,
+                        "similarity_score": round(cand_sim, 4),
+                        "similarity_pct": round(cand_pct, 1),
+                        "is_match": is_cand_match,
+                    })
 
             # Match criteria
             if is_arcface:
@@ -156,11 +190,14 @@ def run_scan_job(job_id: str, folder_url: str, ref_images_bytes: List[bytes], th
             item = {
                 "filename": fname,
                 "file_id": fid,
+                "image_width": img_w,
+                "image_height": img_h,
                 "faces_found": len(faces),
                 "similarity_score": round(best_sim, 4) if best_sim >= -0.9 else 0.0,
                 "min_distance": round(min_dist, 4) if min_dist != float("inf") else None,
                 "similarity_pct": round(sim_pct, 1),
                 "is_match": is_match,
+                "biometrics": biometrics_list,
                 "drive_view_url": f"https://drive.google.com/file/d/{fid}/view",
                 "drive_download_url": f"https://drive.usercontent.google.com/download?id={fid}&export=download",
                 "preview_url": f"/preview/{job_id}/{fname}"

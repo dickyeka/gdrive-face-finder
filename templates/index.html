@@ -3,14 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Google Drive Face Finder — Deep AI Photo Search</title>
+  <title>Google Drive Face Finder — Biometric AI Photo Search</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
   <style>
     body {
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0b0f19 80%);
+      background: radial-gradient(circle at 50% 0%, #131c31 0%, #080c14 80%);
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    @keyframes scanline {
+      0% { top: 5%; opacity: 0.3; }
+      50% { top: 90%; opacity: 1; }
+      100% { top: 5%; opacity: 0.3; }
+    }
+    .animate-scanline {
+      animation: scanline 2.4s ease-in-out infinite;
+    }
+    .reticle-corner {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border-color: #22d3ee;
     }
   </style>
 </head>
@@ -20,20 +37,20 @@
   <header class="border-b border-slate-800/80 bg-slate-900/40 backdrop-blur-md sticky top-0 z-40">
     <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/25">
           <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
         <div>
           <span class="font-bold text-base tracking-tight text-white">Drive Face Finder</span>
-          <span id="engineBadge" class="text-[11px] ml-2 px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
-            YuNet + ArcFace 512-d
+          <span id="engineBadge" class="text-[11px] ml-2 px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-medium">
+            YuNet + ArcFace 512-d Biometrics
           </span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs text-slate-400">
-        <span class="hidden sm:inline">Google Photos-Grade Deep Embeddings</span>
+        <span class="hidden sm:inline">Biometric Landmark & Hypersphere Verification</span>
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         <span class="text-emerald-400 font-medium">Ready</span>
       </div>
@@ -46,10 +63,10 @@
     <!-- Hero Section -->
     <div class="text-center max-w-2xl mx-auto space-y-2">
       <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-        Find Your Photos in Any <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-300">Google Drive Album</span>
+        Find Your Photos in Any <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-300">Google Drive Album</span>
       </h1>
       <p class="text-sm text-slate-400">
-        Upload 1 to 5 reference photos (front, side angle, action), paste a public Google Drive album link, and our local 512-d deep vision engine will pinpoint all of your photos.
+        Upload 1 to 5 photos or capture a live biometric selfie. Our local 512-d ArcFace engine identifies your action shots with Google Photos-grade precision.
       </p>
     </div>
 
@@ -59,29 +76,35 @@
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           
-          <!-- Column 1: Multi-Photo Reference Upload -->
+          <!-- Column 1: Multi-Photo Reference Upload & Live Webcam Capture -->
           <div class="space-y-2">
             <div class="flex items-center justify-between">
               <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 1. Reference Photos (<span id="photoCountLabel">0</span> Selected)
               </label>
-              <span class="text-[11px] text-blue-400">Multi-Angle Supported</span>
+              
+              <!-- Live Biometric Webcam Trigger Button -->
+              <button type="button" onclick="openWebcamModal(event)" 
+                      class="px-2.5 py-1 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-[11px] font-semibold flex items-center gap-1.5 shadow-md shadow-cyan-600/20 transition-all active:scale-95">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <span>Live Biometric Capture</span>
+              </button>
             </div>
             
             <!-- Upload Dropzone -->
             <div id="dropzone" 
                  onclick="document.getElementById('refInput').click()" 
-                 class="relative border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-2xl min-h-[190px] flex flex-col items-center justify-center cursor-pointer transition-all bg-slate-950/40 hover:bg-slate-900/80 p-4">
+                 class="relative border-2 border-dashed border-slate-700 hover:border-cyan-500 rounded-2xl min-h-[195px] flex flex-col items-center justify-center cursor-pointer transition-all bg-slate-950/40 hover:bg-slate-900/80 p-4">
               
               <input type="file" id="refInput" name="reference_images" accept="image/*" multiple class="hidden" onchange="handleFileSelect(event)" />
               
               <!-- Empty Prompt -->
               <div id="uploadPrompt" class="text-center p-4 space-y-2">
-                <div class="w-10 h-10 rounded-full bg-slate-800 group-hover:bg-blue-600/20 text-slate-400 group-hover:text-blue-400 mx-auto flex items-center justify-center transition-colors">
+                <div class="w-10 h-10 rounded-full bg-slate-800 group-hover:bg-cyan-600/20 text-slate-400 group-hover:text-cyan-400 mx-auto flex items-center justify-center transition-colors">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                 </div>
-                <p class="text-xs font-semibold text-slate-300">Click or drag & drop reference photos</p>
-                <p class="text-[11px] text-slate-500">Select 1 to 5 photos (portrait, profile, sports/action)</p>
+                <p class="text-xs font-semibold text-slate-300">Click to upload or drag & drop files</p>
+                <p class="text-[11px] text-slate-500">Upload 1 to 5 photos or use the Webcam button above</p>
               </div>
 
               <!-- Multi-Image Thumbnails Tray -->
@@ -92,8 +115,8 @@
 
             <!-- Pro Tip Note -->
             <p class="text-[11px] text-slate-400 flex items-center gap-1.5">
-              <svg class="w-3.5 h-3.5 text-blue-400 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
-              <span>Tip: Uploading 2–4 photos (e.g. front + side profile) dramatically boosts action shot accuracy.</span>
+              <svg class="w-3.5 h-3.5 text-cyan-400 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+              <span>Tip: 2–3 photos from different angles (front + side profile) maximize action shot recall.</span>
             </p>
           </div>
 
@@ -107,7 +130,7 @@
                 <input type="url" id="folderUrl" name="folder_url" required
                        placeholder="https://drive.google.com/drive/folders/..." 
                        value="https://drive.google.com/drive/folders/1HVdtEbbfZ8ok7MheW7GEhSSlty_HD_x_?usp=sharing"
-                       class="w-full bg-slate-950/60 border border-slate-700 focus:border-blue-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-mono text-xs" />
+                       class="w-full bg-slate-950/60 border border-slate-700 focus:border-cyan-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-all font-mono text-xs" />
               </div>
               <p class="text-[11px] text-slate-500">Make sure the folder sharing is set to "Anyone with the link can view".</p>
             </div>
@@ -115,12 +138,12 @@
             <!-- ArcFace Cosine Sensitivity Slider -->
             <div class="space-y-2 bg-slate-950/40 p-3.5 rounded-xl border border-slate-800">
               <div class="flex items-center justify-between text-xs">
-                <span class="font-medium text-slate-300">Matching Sensitivity (ArcFace Cosine)</span>
-                <span id="toleranceLabel" class="font-mono text-blue-400 font-semibold">0.48 (Balanced)</span>
+                <span class="font-medium text-slate-300">Biometric Sensitivity (ArcFace Cosine)</span>
+                <span id="toleranceLabel" class="font-mono text-cyan-400 font-semibold">0.48 (Balanced)</span>
               </div>
               <input type="range" id="thresholdSlider" name="threshold" min="0.38" max="0.62" step="0.02" value="0.48"
                      oninput="updateToleranceLabel(this.value)"
-                     class="w-full accent-blue-500 cursor-pointer h-1.5 bg-slate-700 rounded-lg" />
+                     class="w-full accent-cyan-500 cursor-pointer h-1.5 bg-slate-700 rounded-lg" />
               <div class="flex justify-between text-[10px] text-slate-500 font-medium">
                 <span>0.38 (High Recall)</span>
                 <span>0.48 (Balanced — Recommended)</span>
@@ -130,7 +153,7 @@
 
             <!-- Submit Button -->
             <button type="submit" id="submitBtn"
-                    class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold py-3.5 px-6 rounded-xl shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all transform active:scale-[0.99]">
+                    class="w-full bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-semibold py-3.5 px-6 rounded-xl shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition-all transform active:scale-[0.99]">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
               <span>Scan Album for Matches</span>
             </button>
@@ -144,7 +167,7 @@
     <div id="progressSection" class="hidden bg-slate-900/60 border border-slate-800 rounded-3xl p-6 backdrop-blur-xl shadow-xl space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div class="flex items-center gap-3">
-          <div class="w-3 h-3 rounded-full bg-blue-500 animate-ping"></div>
+          <div class="w-3 h-3 rounded-full bg-cyan-500 animate-ping"></div>
           <div>
             <h3 id="progressTitle" class="text-sm font-semibold text-white">Scanning Album in Progress...</h3>
             <p id="progressDetail" class="text-xs text-slate-400">Connecting to Google Drive...</p>
@@ -159,7 +182,7 @@
 
       <!-- Animated Progress Bar -->
       <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
-        <div id="progressBar" class="bg-gradient-to-r from-blue-500 to-emerald-400 h-2.5 rounded-full transition-all duration-300 w-0"></div>
+        <div id="progressBar" class="bg-gradient-to-r from-cyan-500 via-blue-500 to-emerald-400 h-2.5 rounded-full transition-all duration-300 w-0"></div>
       </div>
       <div class="flex justify-between text-[11px] text-slate-500 font-mono">
         <span id="processedText">0 / 0 scanned</span>
@@ -174,9 +197,17 @@
       <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-4">
         <div>
           <h2 id="resultsHeading" class="text-2xl font-bold tracking-tight text-white">Matching Photos</h2>
-          <p id="resultsSubheading" class="text-xs text-slate-400 mt-0.5">Click any photo to open full-screen viewer.</p>
+          <p id="resultsSubheading" class="text-xs text-slate-400 mt-0.5">Click any photo to inspect full biometric landmarks and metrics.</p>
         </div>
         <div class="flex items-center gap-3">
+          <!-- Biometric HUD Overlay Toggle Button -->
+          <button type="button" id="hudToggleBtn" onclick="toggleBiometricHUD()" 
+                  class="px-3 py-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-medium flex items-center gap-2 transition-all shadow-sm">
+            <span id="hudToggleDot" class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+            <span id="hudToggleText">Biometric HUD: ON</span>
+          </button>
+
+          <!-- Download ZIP Button -->
           <a id="downloadZipBtn" href="#" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
             <span>Download All Matches (.ZIP)</span>
@@ -192,30 +223,105 @@
 
   </main>
 
-  <!-- Lightbox Modal -->
+  <!-- Live Webcam Biometric Capture Modal -->
+  <div id="webcamModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 max-w-lg w-full flex flex-col items-center shadow-2xl relative space-y-4">
+      
+      <!-- Close Button -->
+      <button onclick="closeWebcamModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+
+      <!-- Modal Header -->
+      <div class="text-center space-y-1">
+        <div class="flex items-center justify-center gap-2">
+          <div class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></div>
+          <h3 class="text-base font-bold text-white tracking-tight">Live Biometric Face Scanner</h3>
+        </div>
+        <p class="text-xs text-slate-400">Position your face inside the biometric reticle for optimal extraction.</p>
+      </div>
+
+      <!-- Video Feed with Biometric Scanning Frame -->
+      <div class="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-black flex items-center justify-center border border-slate-800 shadow-inner">
+        <video id="webcamVideo" autoplay playsinline muted class="w-full h-full object-cover -scale-x-100"></video>
+        <canvas id="webcamCanvas" class="hidden"></canvas>
+
+        <!-- Biometric Oval HUD Overlay -->
+        <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
+          <div class="relative w-44 h-60 rounded-[50%] border-2 border-cyan-400/80 shadow-[0_0_25px_rgba(34,211,238,0.35)] flex items-center justify-center overflow-hidden">
+            <!-- Sweeping Laser Scanline -->
+            <div class="absolute w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-scanline"></div>
+          </div>
+          
+          <!-- Targeting Reticle Corners -->
+          <div class="absolute top-6 left-6 w-5 h-5 border-t-2 border-l-2 border-cyan-400/80"></div>
+          <div class="absolute top-6 right-6 w-5 h-5 border-t-2 border-r-2 border-cyan-400/80"></div>
+          <div class="absolute bottom-6 left-6 w-5 h-5 border-b-2 border-l-2 border-cyan-400/80"></div>
+          <div class="absolute bottom-6 right-6 w-5 h-5 border-b-2 border-r-2 border-cyan-400/80"></div>
+
+          <!-- Sensor Active Badge -->
+          <div class="absolute bottom-3 px-3 py-1 rounded-full bg-black/75 backdrop-blur-md border border-cyan-500/30 text-[10px] font-mono text-cyan-300 flex items-center gap-1.5 shadow-lg">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Biometric Sensor Active</span>
+          </div>
+        </div>
+
+        <!-- Capture Flash Effect -->
+        <div id="captureFlash" class="absolute inset-0 bg-white opacity-0 pointer-events-none transition-opacity duration-200"></div>
+      </div>
+
+      <!-- Modal Actions -->
+      <div class="flex items-center justify-between w-full gap-3 pt-2">
+        <button type="button" onclick="closeWebcamModal()" class="w-1/3 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-semibold transition-colors">
+          Cancel
+        </button>
+        <button type="button" onclick="captureWebcamPhoto()" class="w-2/3 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-lg shadow-cyan-600/25 flex items-center justify-center gap-2 transition-all active:scale-98">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span>Capture Biometric Selfie</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Lightbox Modal with Biometric Inspector -->
   <div id="lightbox" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <button onclick="closeLightbox()" class="absolute top-4 right-4 text-white/80 hover:text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+    <!-- Controls -->
+    <button onclick="closeLightbox()" class="absolute top-4 right-4 text-white/80 hover:text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-20">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
     </button>
-    <button onclick="prevImage(event)" class="absolute left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+    <button onclick="prevImage(event)" class="absolute left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-20">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
     </button>
-    <button onclick="nextImage(event)" class="absolute right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+    <button onclick="nextImage(event)" class="absolute right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-20">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
     </button>
-    <div class="max-w-4xl max-h-[90vh] flex flex-col items-center">
-      <img id="lightboxImg" src="" alt="Enlarged photo" class="max-h-[75vh] max-w-full object-contain rounded-lg shadow-2xl" />
-      <div class="mt-4 flex flex-wrap items-center justify-between gap-4 w-full px-2 text-white">
+
+    <div class="max-w-4xl max-h-[92vh] flex flex-col items-center w-full">
+      <!-- Image Stage with Responsive Biometric HUD Overlay -->
+      <div id="lightboxStage" class="relative max-h-[68vh] max-w-full flex items-center justify-center rounded-xl overflow-hidden bg-black/60 shadow-2xl">
+        <img id="lightboxImg" src="" alt="Enlarged photo" class="max-h-[68vh] max-w-full object-contain block" onload="updateLightboxOverlay()" />
+        <div id="lightboxOverlay" class="absolute inset-0 pointer-events-none"></div>
+      </div>
+
+      <!-- Biometric Metrics Card -->
+      <div class="mt-3 w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 backdrop-blur-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-white">
         <div>
-          <h2 id="lightboxTitle" class="text-base font-semibold"></h2>
-          <p id="lightboxMeta" class="text-xs text-slate-400"></p>
+          <div class="flex items-center gap-2">
+            <h2 id="lightboxTitle" class="text-sm font-semibold truncate max-w-xs sm:max-w-md"></h2>
+            <span id="lightboxBadge" class="text-[10px] px-2 py-0.5 rounded-full font-mono border"></span>
+          </div>
+          <div id="lightboxBiometrics" class="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 mt-1 font-mono">
+            <!-- Dynamic biometric metrics injected here -->
+          </div>
         </div>
-        <div class="flex items-center gap-3">
-          <a id="lightboxDriveLink" href="" target="_blank" class="px-3.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-medium transition-colors">
-            Open on Google Drive
+        
+        <div class="flex items-center gap-2 shrink-0">
+          <a id="lightboxDriveLink" href="" target="_blank" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-medium transition-colors">
+            Google Drive
           </a>
-          <a id="lightboxDownloadLink" href="" target="_blank" class="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-medium transition-colors">
-            Download RAW Original
+          <a id="lightboxDownloadLink" href="" target="_blank" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-medium transition-colors">
+            Download RAW
           </a>
         </div>
       </div>
@@ -228,6 +334,8 @@
     let currentMatches = [];
     let currentLightboxIdx = 0;
     let selectedFiles = []; // Array of File objects
+    let showBiometricHUD = true; // Toggle state for biometric overlays
+    let webcamStream = null;
 
     // Initialize engine parameters from backend
     async function loadEngineInfo() {
@@ -235,7 +343,7 @@
         const res = await fetch('/api/info');
         const data = await res.json();
         if (data.is_arcface) {
-          document.getElementById('engineBadge').textContent = 'YuNet + ArcFace 512-d (Google Photos-grade)';
+          document.getElementById('engineBadge').textContent = 'YuNet + ArcFace 512-d Biometrics';
           const slider = document.getElementById('thresholdSlider');
           slider.min = data.min_threshold;
           slider.max = data.max_threshold;
@@ -257,11 +365,97 @@
       document.getElementById('toleranceLabel').textContent = `${v.toFixed(2)} ${desc}`;
     }
 
+    function toggleBiometricHUD() {
+      showBiometricHUD = !showBiometricHUD;
+      const text = document.getElementById('hudToggleText');
+      const dot = document.getElementById('hudToggleDot');
+      const btn = document.getElementById('hudToggleBtn');
+
+      if (showBiometricHUD) {
+        text.textContent = 'Biometric HUD: ON';
+        dot.className = 'w-2 h-2 rounded-full bg-cyan-400 animate-pulse';
+        btn.className = 'px-3 py-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-medium flex items-center gap-2 transition-all shadow-sm';
+        document.querySelectorAll('.biometric-layer').forEach(el => el.classList.remove('hidden'));
+      } else {
+        text.textContent = 'Biometric HUD: OFF';
+        dot.className = 'w-2 h-2 rounded-full bg-slate-500';
+        btn.className = 'px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-400 text-xs font-medium flex items-center gap-2 transition-all shadow-sm';
+        document.querySelectorAll('.biometric-layer').forEach(el => el.classList.add('hidden'));
+      }
+      updateLightboxOverlay();
+    }
+
+    // --- Webcam Biometric Scanner Functions ---
+    async function openWebcamModal(event) {
+      if (event) event.stopPropagation();
+      const modal = document.getElementById('webcamModal');
+      const video = document.getElementById('webcamVideo');
+      modal.classList.remove('hidden');
+
+      try {
+        webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        video.srcObject = webcamStream;
+      } catch (err) {
+        alert('Could not access webcam: ' + err.message);
+        closeWebcamModal();
+      }
+    }
+
+    function closeWebcamModal() {
+      const modal = document.getElementById('webcamModal');
+      const video = document.getElementById('webcamVideo');
+      modal.classList.add('hidden');
+      if (webcamStream) {
+        webcamStream.getTracks().forEach(track => track.stop());
+        webcamStream = null;
+      }
+      if (video) video.srcObject = null;
+    }
+
+    function captureWebcamPhoto() {
+      const video = document.getElementById('webcamVideo');
+      const canvas = document.getElementById('webcamCanvas');
+      const flash = document.getElementById('captureFlash');
+
+      if (!video || !video.videoWidth) return;
+
+      // Trigger capture flash effect
+      flash.classList.remove('opacity-0');
+      flash.classList.add('opacity-80');
+      setTimeout(() => {
+        flash.classList.remove('opacity-80');
+        flash.classList.add('opacity-0');
+      }, 150);
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      // Flip horizontally to match selfie view
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const filename = `biometric_scan_${Date.now()}.jpg`;
+        const file = new File([blob], filename, { type: 'image/jpeg' });
+        
+        if (selectedFiles.length < 5) {
+          selectedFiles.push(file);
+          renderSelectedThumbnails();
+        }
+        closeWebcamModal();
+      }, 'image/jpeg', 0.95);
+    }
+
+    // --- Multi-Photo Selection & Thumbnails ---
     function handleFileSelect(event) {
       const files = Array.from(event.target.files);
       if (!files.length) return;
 
-      // Add to selected files (limit to 5 total)
       for (const f of files) {
         if (selectedFiles.length >= 5) break;
         selectedFiles.push(f);
@@ -306,15 +500,21 @@
         removeBtn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>`;
         removeBtn.onclick = (e) => removeFile(idx, e);
 
+        // Biometric Verified Tag
+        const tag = document.createElement('div');
+        tag.className = "absolute bottom-1 left-1 px-1.5 py-0.2 rounded bg-black/75 text-[9px] font-mono text-cyan-300 backdrop-blur-xs";
+        tag.textContent = `Ref #${idx + 1}`;
+
         card.appendChild(img);
         card.appendChild(removeBtn);
+        card.appendChild(tag);
         tray.appendChild(card);
       });
 
       // If under limit, append an "Add More" tile
       if (selectedFiles.length < 5) {
         const addCard = document.createElement('div');
-        addCard.className = "aspect-square rounded-xl border border-dashed border-slate-700 hover:border-blue-500 bg-slate-900/40 hover:bg-slate-900 flex flex-col items-center justify-center cursor-pointer transition-colors text-slate-400 hover:text-white";
+        addCard.className = "aspect-square rounded-xl border border-dashed border-slate-700 hover:border-cyan-500 bg-slate-900/40 hover:bg-slate-900 flex flex-col items-center justify-center cursor-pointer transition-colors text-slate-400 hover:text-white";
         addCard.onclick = (e) => {
           e.stopPropagation();
           document.getElementById('refInput').click();
@@ -332,13 +532,13 @@
     ['dragenter', 'dragover'].forEach(name => {
       dropzone.addEventListener(name, (e) => {
         e.preventDefault();
-        dropzone.classList.add('border-blue-500', 'bg-slate-900/90');
+        dropzone.classList.add('border-cyan-500', 'bg-slate-900/90');
       });
     });
     ['dragleave', 'drop'].forEach(name => {
       dropzone.addEventListener(name, (e) => {
         e.preventDefault();
-        dropzone.classList.remove('border-blue-500', 'bg-slate-900/90');
+        dropzone.classList.remove('border-cyan-500', 'bg-slate-900/90');
       });
     });
     dropzone.addEventListener('drop', (e) => {
@@ -353,6 +553,7 @@
       }
     });
 
+    // --- Submission and Progress Handling ---
     async function handleScanSubmit(event) {
       event.preventDefault();
       
@@ -367,7 +568,7 @@
       }
       
       if (selectedFiles.length === 0) {
-        alert('Please select or upload at least one reference photo.');
+        alert('Please select or capture at least one reference photo.');
         return;
       }
       
@@ -375,7 +576,6 @@
       formData.append('folder_url', folderUrl);
       formData.append('threshold', thresholdSlider.value);
       
-      // Append all selected reference photos
       selectedFiles.forEach((file) => {
         formData.append('reference_images', file);
       });
@@ -383,7 +583,7 @@
       const submitBtn = document.getElementById('submitBtn');
       submitBtn.disabled = true;
       submitBtn.classList.add('opacity-75');
-      submitBtn.innerHTML = `<span class="animate-spin mr-2">⚙</span> Starting ArcFace 512-d Scanner...`;
+      submitBtn.innerHTML = `<span class="animate-spin mr-2">⚙</span> Extracting ArcFace 512-d Biometrics...`;
       
       document.getElementById('progressSection').classList.remove('hidden');
       document.getElementById('resultsSection').classList.add('hidden');
@@ -446,7 +646,7 @@
       currentMatches = data.matches || [];
       
       document.getElementById('resultsHeading').textContent = `${currentMatches.length} Matching Photos Found`;
-      document.getElementById('resultsSubheading').textContent = `Scanned ${data.total_photos} photos using ArcFace 512-d deep representations.`;
+      document.getElementById('resultsSubheading').textContent = `Scanned ${data.total_photos} photos using ArcFace 512-d deep biometrics.`;
       document.getElementById('downloadZipBtn').href = `/api/download-zip/${jobId}`;
       
       renderGrid(currentMatches);
@@ -454,6 +654,7 @@
       document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
     }
 
+    // --- Biometric Landmark & Card Rendering ---
     function renderGrid(matches) {
       const grid = document.getElementById('galleryGrid');
       grid.innerHTML = '';
@@ -470,8 +671,45 @@
           badgeColor = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
           badgeText = 'High Confidence';
         } else if (m.similarity_score >= 0.48 || m.similarity_pct >= 55) {
-          badgeColor = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
+          badgeColor = 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30';
           badgeText = 'Confirmed Match';
+        }
+
+        // Generate SVG or HTML Biometric overlay for each detected face
+        const imgW = m.image_width || 1000;
+        const imgH = m.image_height || 667;
+        let biometricsHtml = '';
+
+        if (m.biometrics && m.biometrics.length > 0) {
+          m.biometrics.forEach(b => {
+            const topPct = (b.box.top / imgH) * 100;
+            const leftPct = (b.box.left / imgW) * 100;
+            const widthPct = (b.box.width / imgW) * 100;
+            const heightPct = (b.box.height / imgH) * 100;
+
+            const boxBorder = b.is_match 
+              ? 'border-cyan-400 bg-cyan-400/10 shadow-[0_0_12px_rgba(34,211,238,0.5)]' 
+              : 'border-slate-500/50 bg-slate-500/5';
+            
+            // 5 Landmark Dots (Eyes = Cyan, Nose = Amber, Mouth = Emerald)
+            let landmarkDots = '';
+            if (b.landmarks) {
+              const lm = b.landmarks;
+              if (lm.left_eye) landmarkDots += `<div style="top: ${(lm.left_eye[1]/imgH)*100}%; left: ${(lm.left_eye[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-cyan-400 shadow-[0_0_5px_#22d3ee]"></div>`;
+              if (lm.right_eye) landmarkDots += `<div style="top: ${(lm.right_eye[1]/imgH)*100}%; left: ${(lm.right_eye[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-cyan-400 shadow-[0_0_5px_#22d3ee]"></div>`;
+              if (lm.nose_tip) landmarkDots += `<div style="top: ${(lm.nose_tip[1]/imgH)*100}%; left: ${(lm.nose_tip[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-amber-400 shadow-[0_0_5px_#fbbf24]"></div>`;
+              if (lm.left_mouth) landmarkDots += `<div style="top: ${(lm.left_mouth[1]/imgH)*100}%; left: ${(lm.left_mouth[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-emerald-400 shadow-[0_0_5px_#34d399]"></div>`;
+              if (lm.right_mouth) landmarkDots += `<div style="top: ${(lm.right_mouth[1]/imgH)*100}%; left: ${(lm.right_mouth[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-emerald-400 shadow-[0_0_5px_#34d399]"></div>`;
+            }
+
+            biometricsHtml += `
+              <div style="top: ${topPct}%; left: ${leftPct}%; width: ${widthPct}%; height: ${heightPct}%;" 
+                   class="absolute border-2 ${boxBorder} rounded-lg pointer-events-none transition-all">
+                ${b.is_match ? `<span class="absolute -top-5 left-0 px-1 py-0.2 rounded bg-black/80 font-mono text-[9px] text-cyan-300 font-semibold whitespace-nowrap">${b.similarity_pct}%</span>` : ''}
+              </div>
+              ${landmarkDots}
+            `;
+          });
         }
 
         const card = document.createElement('div');
@@ -480,11 +718,20 @@
         card.innerHTML = `
           <div class="aspect-[4/3] w-full overflow-hidden bg-black/40 relative">
             <img src="${m.preview_url}" alt="${m.filename}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+            
+            <!-- Biometric Overlay Layer -->
+            <div class="biometric-layer absolute inset-0 pointer-events-none ${showBiometricHUD ? '' : 'hidden'}">
+              ${biometricsHtml}
+            </div>
+
+            <!-- Top Left Match Pill -->
             <div class="absolute top-3 left-3 px-2.5 py-1 rounded-md text-[11px] font-semibold backdrop-blur-md border ${badgeColor} flex items-center gap-1.5 shadow-md">
               <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
               <span>${m.similarity_pct}% (${badgeText})</span>
             </div>
-            <div class="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[10px] font-mono bg-black/60 text-slate-300 backdrop-blur-sm">
+
+            <!-- Bottom Right Metric -->
+            <div class="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[10px] font-mono bg-black/70 text-cyan-300 backdrop-blur-sm border border-cyan-500/20">
               Sim: ${m.similarity_score.toFixed(3)}
             </div>
           </div>
@@ -496,7 +743,7 @@
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
               </a>
               <a href="${m.drive_download_url}" target="_blank" onclick="event.stopPropagation()" title="Download Full-Res Original"
-                 class="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors">
+                 class="p-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white transition-colors">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
               </a>
             </div>
@@ -516,16 +763,103 @@
       `;
     }
 
+    // --- Lightbox with Full Biometric Inspector ---
     function openLightbox(index) {
       currentLightboxIdx = index;
       const m = currentMatches[currentLightboxIdx];
-      document.getElementById('lightboxImg').src = m.preview_url;
+      const img = document.getElementById('lightboxImg');
+      img.src = m.preview_url;
       document.getElementById('lightboxTitle').textContent = m.filename;
-      document.getElementById('lightboxMeta').textContent = `Match Confidence: ${m.similarity_pct}% (ArcFace Sim: ${m.similarity_score.toFixed(3)}) • Photo ${index + 1} of ${currentMatches.length}`;
+      
+      const badge = document.getElementById('lightboxBadge');
+      if (m.similarity_score >= 0.58 || m.similarity_pct >= 80) {
+        badge.className = 'text-[10px] px-2 py-0.5 rounded-full font-mono border bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+        badge.textContent = `${m.similarity_pct}% High Confidence`;
+      } else {
+        badge.className = 'text-[10px] px-2 py-0.5 rounded-full font-mono border bg-cyan-500/20 text-cyan-300 border-cyan-500/30';
+        badge.textContent = `${m.similarity_pct}% Confirmed Match`;
+      }
+
+      // Generate Biometric Breakdown pills
+      const bioDiv = document.getElementById('lightboxBiometrics');
+      const bestBio = (m.biometrics && m.biometrics.length > 0) ? m.biometrics.find(b => b.is_match) || m.biometrics[0] : null;
+
+      let bioPills = `<span>• Photo ${index + 1} of ${currentMatches.length}</span>`;
+      bioPills += `<span class="text-cyan-300 font-semibold">ArcFace Sim: ${m.similarity_score.toFixed(4)}</span>`;
+      if (bestBio) {
+        bioPills += `<span>Confidence: ${(bestBio.confidence * 100).toFixed(1)}%</span>`;
+        if (bestBio.ipd_px) bioPills += `<span>IPD: ${bestBio.ipd_px}px</span>`;
+        if (bestBio.roll_deg !== undefined) bioPills += `<span>Roll: ${bestBio.roll_deg}°</span>`;
+        bioPills += `<span class="text-emerald-400">5-Point Landmarks: OK</span>`;
+      }
+      bioDiv.innerHTML = bioPills;
+
       document.getElementById('lightboxDriveLink').href = m.drive_view_url;
       document.getElementById('lightboxDownloadLink').href = m.drive_download_url;
       document.getElementById('lightbox').classList.remove('hidden');
+
+      updateLightboxOverlay();
     }
+
+    function updateLightboxOverlay() {
+      const overlay = document.getElementById('lightboxOverlay');
+      overlay.innerHTML = '';
+      if (!showBiometricHUD) return;
+
+      const m = currentMatches[currentLightboxIdx];
+      const img = document.getElementById('lightboxImg');
+      if (!m || !m.biometrics || !img.naturalWidth || !img.clientWidth) return;
+
+      // Compute exact rendered image bounding box inside stage
+      const displayedWidth = img.clientWidth;
+      const displayedHeight = img.clientHeight;
+      const naturalWidth = m.image_width || img.naturalWidth;
+      const naturalHeight = m.image_height || img.naturalHeight;
+
+      // Center offset
+      const stage = document.getElementById('lightboxStage');
+      const offsetX = (stage.clientWidth - displayedWidth) / 2;
+      const offsetY = (stage.clientHeight - displayedHeight) / 2;
+
+      let html = '';
+      m.biometrics.forEach(b => {
+        const top = offsetY + (b.box.top / naturalHeight) * displayedHeight;
+        const left = offsetX + (b.box.left / naturalWidth) * displayedWidth;
+        const width = (b.box.width / naturalWidth) * displayedWidth;
+        const height = (b.box.height / naturalHeight) * displayedHeight;
+
+        const boxBorder = b.is_match 
+          ? 'border-cyan-400 bg-cyan-400/10 shadow-[0_0_15px_rgba(34,211,238,0.5)]' 
+          : 'border-slate-500/40 bg-slate-500/5';
+
+        // 5 Landmarks
+        let dots = '';
+        if (b.landmarks) {
+          const lm = b.landmarks;
+          if (lm.left_eye) dots += `<div style="top: ${offsetY + (lm.left_eye[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.left_eye[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-cyan-400 shadow-[0_0_6px_#22d3ee]"></div>`;
+          if (lm.right_eye) dots += `<div style="top: ${offsetY + (lm.right_eye[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.right_eye[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-cyan-400 shadow-[0_0_6px_#22d3ee]"></div>`;
+          if (lm.nose_tip) dots += `<div style="top: ${offsetY + (lm.nose_tip[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.nose_tip[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]"></div>`;
+          if (lm.left_mouth) dots += `<div style="top: ${offsetY + (lm.left_mouth[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.left_mouth[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></div>`;
+          if (lm.right_mouth) dots += `<div style="top: ${offsetY + (lm.right_mouth[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.right_mouth[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></div>`;
+        }
+
+        html += `
+          <div style="top: ${top}px; left: ${left}px; width: ${width}px; height: ${height}px;"
+               class="absolute border-2 ${boxBorder} rounded-lg pointer-events-none">
+            ${b.is_match ? `<span class="absolute -top-6 left-0 px-2 py-0.5 rounded bg-black/85 text-[10px] font-mono font-semibold text-cyan-300 whitespace-nowrap shadow-md">${b.similarity_pct}% (IPD: ${b.ipd_px}px)</span>` : ''}
+          </div>
+          ${dots}
+        `;
+      });
+
+      overlay.innerHTML = html;
+    }
+
+    window.addEventListener('resize', () => {
+      if (!document.getElementById('lightbox').classList.contains('hidden')) {
+        updateLightboxOverlay();
+      }
+    });
 
     function closeLightbox() {
       document.getElementById('lightbox').classList.add('hidden');
