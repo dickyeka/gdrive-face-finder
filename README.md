@@ -1,3 +1,13 @@
+---
+title: GDrive Face Finder
+emoji: ⚽
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Google Drive Face Finder & Face Recognition MCP Server
 
 An AI-powered computer vision system and web application designed to automatically scan Google Drive photo albums, detect and identify faces, and pull all action shots of specific individuals.

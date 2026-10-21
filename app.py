@@ -27,6 +27,9 @@ APP_DIR = Path(__file__).parent.resolve()
 DATA_DIR = APP_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+STATIC_DIR = APP_DIR / "static"
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
 JOBS: Dict[str, Dict[str, Any]] = {}
 engine = server.get_active_engine()
 
@@ -281,11 +284,12 @@ routes = [
     Route("/api/results/{job_id}", endpoint=get_results_api, methods=["GET"]),
     Route("/api/download-zip/{job_id}", endpoint=download_zip_api, methods=["GET"]),
     Route("/preview/{job_id}/{filename}", endpoint=serve_preview, methods=["GET"]),
-    Mount("/static", app=StaticFiles(directory=str(APP_DIR / "static")), name="static"),
+    Mount("/static", app=StaticFiles(directory=str(STATIC_DIR)), name="static"),
 ]
 
 app = Starlette(debug=True, routes=routes)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)
