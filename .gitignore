@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cpython
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Virtual Environments
+.venv/
+venv/
+env/
+
+# Job data & cached downloads
+data/
+drive_photos/
+drive_photos*/
+*.sqlite3
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+*.log
