@@ -11,6 +11,7 @@ import threading
 import urllib.request
 from pathlib import Path
 from typing import Dict, Any, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import cv2
 
 from starlette.applications import Starlette
@@ -65,9 +66,18 @@ def run_scan_job(job_id: str, folder_url: str, ref_images_bytes: List[bytes], th
             ref_path = ref_dir / f"reference_{idx}.jpg"
             ref_path.write_bytes(r_bytes)
             try:
-                faces = engine.extract_encodings(str(ref_path))
-                for fmeta, enc in faces:
-                    ref_encodings.append(enc)
+                if hasattr(engine, "extract_reference_encodings"):
+                    aug_vecs = engine.extract_reference_encodings(str(ref_path))
+                    ref_encodings.extend(aug_vecs)
+                else:
+                    faces = engine.extract_encodings(str(ref_path))
+                    if faces:
+                        faces_sorted = sorted(
+                            faces,
+                            key=lambda x: x[0].box.width * x[0].box.height,
+                            reverse=True,
+                        )
+                        ref_encodings.append(faces_sorted[0][1])
             except Exception:
                 continue
 
@@ -97,32 +107,38 @@ def run_scan_job(job_id: str, folder_url: str, ref_images_bytes: List[bytes], th
             
         job["total_photos"] = len(img_files)
         job["status"] = "scanning"
-        job["message"] = f"Found {len(img_files)} photos. Scanning album with {engine.name}..."
+        job["message"] = f"Found {len(img_files)} photos. Downloading & scanning album with {engine.name}..."
         
         photos_dir = job_dir / "photos"
         photos_dir.mkdir(parents=True, exist_ok=True)
+
+        # Pre-download thumbnails concurrently for high speed
+        def _download_one(gfile):
+            fname = Path(gfile.path).name
+            fid = gfile.id
+            local_path = photos_dir / fname
+            if not local_path.exists() or local_path.stat().st_size < 1000:
+                thumb_url = f"https://lh3.googleusercontent.com/d/{fid}=w1000"
+                for _ in range(3):
+                    try:
+                        req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
+                        data = urllib.request.urlopen(req, timeout=15).read()
+                        if len(data) > 1000:
+                            local_path.write_bytes(data)
+                            break
+                    except Exception:
+                        time.sleep(0.2)
+            return (fname, fid, local_path)
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            downloaded_items = list(pool.map(_download_one, img_files))
         
         matches = []
         all_results = []
         
-        for idx, gfile in enumerate(img_files, 1):
-            fname = gfile.path
-            fid = gfile.id
-            local_path = photos_dir / fname
-            thumb_url = f"https://lh3.googleusercontent.com/d/{fid}=w1000"
-            
+        for idx, (fname, fid, local_path) in enumerate(downloaded_items, 1):
             job["current_photo"] = fname
             job["processed_count"] = idx
-            
-            # Download thumbnail
-            if not local_path.exists() or local_path.stat().st_size < 1000:
-                for attempt in range(3):
-                    try:
-                        req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
-                        local_path.write_bytes(urllib.request.urlopen(req, timeout=12).read())
-                        break
-                    except Exception:
-                        time.sleep(0.2)
                         
             if not local_path.exists() or local_path.stat().st_size < 1000:
                 continue
@@ -141,6 +157,9 @@ def run_scan_job(job_id: str, folder_url: str, ref_images_bytes: List[bytes], th
             min_dist = float("inf")
             biometrics_list = []
 
+            primary_thresh = 0.42
+            secondary_thresh = min(threshold, 0.335) if threshold <= 0.50 else max(0.30, threshold - 0.12)
+
             if faces:
                 for fmeta, cand_enc in faces:
                     cand_sim = max((engine.compute_similarity(r, cand_enc) for r in ref_encodings), default=0.0)
@@ -152,7 +171,7 @@ def run_scan_job(job_id: str, folder_url: str, ref_images_bytes: List[bytes], th
                         min_dist = cand_dist
 
                     if is_arcface:
-                        is_cand_match = (cand_sim >= threshold)
+                        is_cand_match = (cand_sim >= secondary_thresh)
                         cand_pct = max(0.0, min(100.0, (cand_sim - 0.25) / (0.65 - 0.25) * 100.0))
                     else:
                         is_cand_match = (cand_dist <= threshold)
@@ -177,19 +196,20 @@ def run_scan_job(job_id: str, folder_url: str, ref_images_bytes: List[bytes], th
                         "is_match": is_cand_match,
                     })
 
-            # Match criteria
+            # Match criteria (includes both Primary Solo & Action Shots and Secondary/Background Appearances)
             if is_arcface:
-                # ArcFace cosine similarity: threshold typically 0.45 - 0.55
-                is_match = (best_sim >= threshold)
+                is_match = (best_sim >= secondary_thresh)
                 # Calibrated percentage: [0.25, 0.65] mapped to [0%, 100%]
                 sim_pct = max(0.0, min(100.0, (best_sim - 0.25) / (0.65 - 0.25) * 100.0))
             else:
                 is_match = (min_dist <= threshold)
                 sim_pct = max(0.0, min(100.0, (1.0 - (min_dist / 1.35)) * 100.0))
             
+            category = "primary" if best_sim >= primary_thresh else "secondary"
             item = {
                 "filename": fname,
                 "file_id": fid,
+                "category": category,
                 "image_width": img_w,
                 "image_height": img_h,
                 "faces_found": len(faces),
@@ -210,10 +230,24 @@ def run_scan_job(job_id: str, folder_url: str, ref_images_bytes: List[bytes], th
                 
         # Sort matches by similarity score descending (highest quality matches first)
         matches.sort(key=lambda x: x["similarity_score"], reverse=True)
+        primary_matches = [m for m in matches if m.get("category") == "primary"]
+        secondary_matches = [m for m in matches if m.get("category") == "secondary"]
         job["matches"] = matches
+        job["primary_matches"] = primary_matches
+        job["secondary_matches"] = secondary_matches
+        job["primary_count"] = len(primary_matches)
+        job["secondary_count"] = len(secondary_matches)
         job["all_results"] = all_results
         job["status"] = "completed"
-        job["message"] = f"Finished! Found {len(matches)} matching photo(s) across {len(img_files)} files."
+        job["message"] = (
+            f"Finished! Found {len(matches)} matching photo(s) "
+            f"({len(primary_matches)} Primary Solo & Action + {len(secondary_matches)} Secondary/Background) "
+            f"across {len(img_files)} files."
+        )
+        try:
+            (job_dir / "job.json").write_text(json.dumps(job), encoding="utf-8")
+        except Exception:
+            pass
         
     except Exception as e:
         job["status"] = "error"
@@ -231,9 +265,9 @@ async def engine_info_api(request):
         "engine": engine.name,
         "is_arcface": is_arcface,
         "embedding_size": 512 if is_arcface else 128,
-        "default_threshold": 0.48 if is_arcface else 1.05,
-        "min_threshold": 0.38 if is_arcface else 0.75,
-        "max_threshold": 0.62 if is_arcface else 1.25,
+        "default_threshold": 0.33 if is_arcface else 1.05,
+        "min_threshold": 0.30 if is_arcface else 0.75,
+        "max_threshold": 0.60 if is_arcface else 1.25,
     })
 
 
@@ -249,7 +283,7 @@ async def start_scan_api(request):
             ref_files = [single_ref]
             
     is_arcface = getattr(engine, "is_arcface_enabled", False)
-    default_thresh_str = "0.48" if is_arcface else "1.05"
+    default_thresh_str = "0.33" if is_arcface else "1.05"
     threshold_str = form.get("threshold", default_thresh_str)
     
     if not folder_url:
@@ -261,9 +295,9 @@ async def start_scan_api(request):
         threshold = float(threshold_str)
         # Handle conversion if old threshold (> 1.0) sent to ArcFace
         if is_arcface and threshold > 1.0:
-            threshold = 0.48
+            threshold = 0.33
     except ValueError:
-        threshold = 0.48 if is_arcface else 1.05
+        threshold = 0.33 if is_arcface else 1.05
         
     ref_bytes_list: List[bytes] = []
     for rf in ref_files:
@@ -334,12 +368,46 @@ async def stream_progress_api(request):
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+def _get_or_load_job(job_id: str):
+    job = JOBS.get(job_id)
+    if not job:
+        jfile = DATA_DIR / job_id / "job.json"
+        if jfile.is_file():
+            try:
+                job = json.loads(jfile.read_text(encoding="utf-8"))
+                JOBS[job_id] = job
+            except Exception:
+                pass
+    return job
+
+
 async def get_results_api(request):
     job_id = request.path_params["job_id"]
-    job = JOBS.get(job_id)
+    job = _get_or_load_job(job_id)
     if not job:
         return JSONResponse({"error": "Job not found."}, status_code=404)
     return JSONResponse(job)
+
+
+async def get_latest_results_api(request):
+    # Find most recent completed job in JOBS or DATA_DIR/*/job.json
+    candidates = []
+    for jfile in DATA_DIR.glob("*/job.json"):
+        try:
+            jdata = json.loads(jfile.read_text(encoding="utf-8"))
+            if jdata.get("status") == "completed":
+                candidates.append((jfile.stat().st_mtime, jdata))
+        except Exception:
+            continue
+    for jid, jdata in JOBS.items():
+        if jdata.get("status") == "completed":
+            candidates.append((jdata.get("created_at", 0), jdata))
+    if not candidates:
+        return JSONResponse({"has_latest": False})
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    best_job = candidates[0][1]
+    JOBS[best_job["job_id"]] = best_job
+    return JSONResponse({"has_latest": True, "job": best_job})
 
 
 async def serve_preview(request):
@@ -353,7 +421,7 @@ async def serve_preview(request):
 
 async def download_zip_api(request):
     job_id = request.path_params["job_id"]
-    job = JOBS.get(job_id)
+    job = _get_or_load_job(job_id)
     if not job or "matches" not in job:
         return JSONResponse({"error": "Job or matches not found."}, status_code=404)
         
@@ -379,6 +447,7 @@ async def download_zip_api(request):
 routes = [
     Route("/", endpoint=index_page, methods=["GET"]),
     Route("/api/info", endpoint=engine_info_api, methods=["GET"]),
+    Route("/api/latest-results", endpoint=get_latest_results_api, methods=["GET"]),
     Route("/api/scan", endpoint=start_scan_api, methods=["POST"]),
     Route("/api/stream/{job_id}", endpoint=stream_progress_api, methods=["GET"]),
     Route("/api/results/{job_id}", endpoint=get_results_api, methods=["GET"]),

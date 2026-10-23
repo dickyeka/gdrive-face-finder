@@ -129,7 +129,7 @@
               <div class="relative">
                 <input type="url" id="folderUrl" name="folder_url" required
                        placeholder="https://drive.google.com/drive/folders/..." 
-                       value="https://drive.google.com/drive/folders/1HVdtEbbfZ8ok7MheW7GEhSSlty_HD_x_?usp=sharing"
+                       value="https://drive.google.com/drive/folders/1qiRv2uPgOR0UmVCaD20wgYNR1QYH8uEi"
                        class="w-full bg-slate-950/60 border border-slate-700 focus:border-cyan-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-all font-mono text-xs" />
               </div>
               <p class="text-[11px] text-slate-500">Make sure the folder sharing is set to "Anyone with the link can view".</p>
@@ -139,15 +139,15 @@
             <div class="space-y-2 bg-slate-950/40 p-3.5 rounded-xl border border-slate-800">
               <div class="flex items-center justify-between text-xs">
                 <span class="font-medium text-slate-300">Biometric Sensitivity (ArcFace Cosine)</span>
-                <span id="toleranceLabel" class="font-mono text-cyan-400 font-semibold">0.48 (Balanced)</span>
+                <span id="toleranceLabel" class="font-mono text-cyan-400 font-semibold">0.33 (Full Recall — Primary + Background)</span>
               </div>
-              <input type="range" id="thresholdSlider" name="threshold" min="0.38" max="0.62" step="0.02" value="0.48"
+              <input type="range" id="thresholdSlider" name="threshold" min="0.30" max="0.60" step="0.01" value="0.33"
                      oninput="updateToleranceLabel(this.value)"
                      class="w-full accent-cyan-500 cursor-pointer h-1.5 bg-slate-700 rounded-lg" />
               <div class="flex justify-between text-[10px] text-slate-500 font-medium">
-                <span>0.38 (High Recall)</span>
-                <span>0.48 (Balanced — Recommended)</span>
-                <span>0.62 (Strict)</span>
+                <span>0.30 (High Recall)</span>
+                <span>0.33 (Recommended — Primary + Secondary)</span>
+                <span>0.60 (Strict)</span>
               </div>
             </div>
 
@@ -215,9 +215,73 @@
         </div>
       </div>
 
-      <!-- Photo Grid -->
-      <div id="galleryGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-        <!-- Rendered dynamically -->
+      <!-- Category Filter Tabs (Same layout as discovered_photos.md) -->
+      <div class="flex flex-wrap items-center gap-2">
+        <button type="button" id="filterAllBtn" onclick="setCategoryFilter('all')"
+                class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-cyan-600 text-white shadow-md shadow-cyan-600/20 transition-all">
+          All Matches (<span id="countAll">0</span>)
+        </button>
+        <button type="button" id="filterPrimaryBtn" onclick="setCategoryFilter('primary')"
+                class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-all">
+          ★ Primary Solo & Action Shots (<span id="countPrimary">0</span>)
+        </button>
+        <button type="button" id="filterSecondaryBtn" onclick="setCategoryFilter('secondary')"
+                class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-all">
+          Secondary / Background Appearances (<span id="countSecondary">0</span>)
+        </button>
+      </div>
+
+      <!-- Section 1: Primary Solo & Action Shots -->
+      <div id="primarySection" class="space-y-4 pt-2">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+          <div class="flex items-center gap-2.5">
+            <span class="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-bold">★ Primary</span>
+            <h3 id="primarySectionHeading" class="text-lg font-bold text-white tracking-tight">Primary Solo &amp; Action Shots (0 Photos)</h3>
+          </div>
+          <span class="text-xs text-slate-400 font-mono">High-Confidence Foreground &amp; Action Matches</span>
+        </div>
+        <div id="primaryGalleryGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Section 2: Secondary / Background Appearances -->
+      <div id="secondarySection" class="space-y-4 pt-4">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+          <div class="flex items-center gap-2.5">
+            <span class="px-2.5 py-1 rounded-lg bg-blue-500/15 text-blue-300 border border-blue-500/30 text-xs font-bold">Secondary</span>
+            <h3 id="secondarySectionHeading" class="text-lg font-bold text-white tracking-tight">Secondary / Background Appearances (0 Photos)</h3>
+          </div>
+          <span class="text-xs text-slate-400 font-mono">Wide-Angle Midfield, Side-Profile &amp; Background Shots</span>
+        </div>
+        <div id="secondaryGalleryGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Direct Google Drive View & Full-Resolution Download Links Table -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 backdrop-blur-xl shadow-xl space-y-4">
+        <div>
+          <h3 class="text-lg font-bold text-white">Direct Google Drive View & Full-Resolution Download Links</h3>
+          <p class="text-xs text-slate-400">Complete biometric match table sorted by ArcFace 512-d Cosine Similarity.</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[11px]">
+                <th class="py-3 px-3">#</th>
+                <th class="py-3 px-3">Photo File</th>
+                <th class="py-3 px-3">Category</th>
+                <th class="py-3 px-3">Faces Detected</th>
+                <th class="py-3 px-3">ArcFace Sim</th>
+                <th class="py-3 px-3 text-right">Google Drive Links</th>
+              </tr>
+            </thead>
+            <tbody id="matchesTableBody" class="divide-y divide-slate-800/60 font-mono">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -359,9 +423,9 @@
 
     function updateToleranceLabel(val) {
       const v = parseFloat(val);
-      let desc = "(Balanced — Recommended)";
-      if (v < 0.44) desc = "(High Recall — Catches Distant Faces)";
-      else if (v > 0.54) desc = "(Strict — Studio Precision)";
+      let desc = "(Balanced — Primary Action Shots)";
+      if (v < 0.36) desc = "(High Recall — Includes Background Shots)";
+      else if (v > 0.50) desc = "(Strict — Studio Precision)";
       document.getElementById('toleranceLabel').textContent = `${v.toFixed(2)} ${desc}`;
     }
 
@@ -638,42 +702,156 @@
       };
     }
 
-    async function finishScan(jobId) {
-      resetSubmitBtn();
-      
-      const res = await fetch('/api/results/' + jobId);
-      const data = await res.json();
+    let currentCategoryFilter = 'all';
+    let filteredMatches = [];
+
+    function isPrimaryMatch(m) {
+      return (m.category || (m.similarity_score >= 0.42 ? 'primary' : 'secondary')) === 'primary';
+    }
+
+    function setCategoryFilter(cat) {
+      currentCategoryFilter = cat;
+      const map = {
+        all: document.getElementById('filterAllBtn'),
+        primary: document.getElementById('filterPrimaryBtn'),
+        secondary: document.getElementById('filterSecondaryBtn'),
+      };
+      Object.keys(map).forEach(k => {
+        if (k === cat) {
+          map[k].className = "px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-cyan-600 text-white shadow-md shadow-cyan-600/20 transition-all";
+        } else {
+          map[k].className = "px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-all";
+        }
+      });
+
+      const primaryList = currentMatches.filter(m => isPrimaryMatch(m));
+      const secondaryList = currentMatches.filter(m => !isPrimaryMatch(m));
+
+      const primarySec = document.getElementById('primarySection');
+      const secondarySec = document.getElementById('secondarySection');
+
+      if (cat === 'all') {
+        filteredMatches = [...currentMatches];
+        primarySec.classList.remove('hidden');
+        secondarySec.classList.remove('hidden');
+      } else if (cat === 'primary') {
+        filteredMatches = primaryList;
+        primarySec.classList.remove('hidden');
+        secondarySec.classList.add('hidden');
+      } else {
+        filteredMatches = secondaryList;
+        primarySec.classList.add('hidden');
+        secondarySec.classList.remove('hidden');
+      }
+
+      renderGridInto('primaryGalleryGrid', primaryList);
+      renderGridInto('secondaryGalleryGrid', secondaryList);
+      renderMatchesTable(filteredMatches);
+    }
+
+    function populateResults(data, shouldScroll = true) {
+      currentJobId = data.job_id || currentJobId;
       currentMatches = data.matches || [];
       
+      const primaryList = currentMatches.filter(m => isPrimaryMatch(m));
+      const secondaryList = currentMatches.filter(m => !isPrimaryMatch(m));
+      const primaryCount = primaryList.length;
+      const secondaryCount = secondaryList.length;
+
+      document.getElementById('countAll').textContent = currentMatches.length;
+      document.getElementById('countPrimary').textContent = primaryCount;
+      document.getElementById('countSecondary').textContent = secondaryCount;
+
+      document.getElementById('primarySectionHeading').textContent = `Primary Solo & Action Shots (${primaryCount} Photos)`;
+      document.getElementById('secondarySectionHeading').textContent = `Secondary / Background Appearances (${secondaryCount} Photos)`;
+
       document.getElementById('resultsHeading').textContent = `${currentMatches.length} Matching Photos Found`;
-      document.getElementById('resultsSubheading').textContent = `Scanned ${data.total_photos} photos using ArcFace 512-d deep biometrics.`;
-      document.getElementById('downloadZipBtn').href = `/api/download-zip/${jobId}`;
+      document.getElementById('resultsSubheading').textContent = `Found ${primaryCount} Primary Solo & Action Shots + ${secondaryCount} Secondary/Background Shots across ${data.total_photos || 108} album files.`;
+      if (currentJobId) {
+        document.getElementById('downloadZipBtn').href = `/api/download-zip/${currentJobId}`;
+      }
       
-      renderGrid(currentMatches);
+      setCategoryFilter('all');
       document.getElementById('resultsSection').classList.remove('hidden');
-      document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+      if (shouldScroll) {
+        document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    async function finishScan(jobId) {
+      resetSubmitBtn();
+      const res = await fetch('/api/results/' + jobId);
+      const data = await res.json();
+      populateResults(data, true);
+    }
+
+    async function loadLatestResults() {
+      try {
+        const res = await fetch('/api/latest-results');
+        const payload = await res.json();
+        if (payload && payload.has_latest && payload.job) {
+          populateResults(payload.job, false);
+        }
+      } catch (e) {
+        console.warn('Could not load latest results:', e);
+      }
+    }
+    loadLatestResults();
+
+    function renderMatchesTable(matches) {
+      const tbody = document.getElementById('matchesTableBody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      matches.forEach((m, idx) => {
+        const isPrimary = isPrimaryMatch(m);
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-800/40 transition-colors cursor-pointer";
+        tr.onclick = () => openLightboxByFilename(m.filename);
+        tr.innerHTML = `
+          <td class="py-3 px-3 text-slate-400">${idx + 1}</td>
+          <td class="py-3 px-3 font-semibold text-white">${m.filename}</td>
+          <td class="py-3 px-3">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-sans font-semibold border ${isPrimary ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-blue-500/15 text-blue-300 border-blue-500/30'}">
+              ${isPrimary ? '★ Primary' : 'Secondary'}
+            </span>
+          </td>
+          <td class="py-3 px-3 text-slate-300">${m.faces_found}</td>
+          <td class="py-3 px-3 text-cyan-300 font-semibold">${m.similarity_score.toFixed(4)}</td>
+          <td class="py-3 px-3 text-right font-sans">
+            <a href="${m.drive_view_url}" target="_blank" onclick="event.stopPropagation()" class="text-cyan-400 hover:underline mr-2">View</a>
+            <span class="text-slate-600">•</span>
+            <a href="${m.drive_download_url}" target="_blank" onclick="event.stopPropagation()" class="text-emerald-400 hover:underline ml-2 font-semibold">Download RAW</a>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function openLightboxByFilename(filename) {
+      const activeList = filteredMatches.length ? filteredMatches : currentMatches;
+      const idx = activeList.findIndex(item => item.filename === filename);
+      if (idx !== -1) {
+        openLightbox(idx);
+      }
     }
 
     // --- Biometric Landmark & Card Rendering ---
-    function renderGrid(matches) {
-      const grid = document.getElementById('galleryGrid');
+    function renderGridInto(containerId, matches) {
+      const grid = document.getElementById(containerId);
+      if (!grid) return;
       grid.innerHTML = '';
       
       if (matches.length === 0) {
-        grid.innerHTML = `<div class="col-span-full text-center py-12 text-slate-500">No matching photos found within the selected sensitivity threshold. Try slightly lowering the sensitivity slider (e.g. 0.42).</div>`;
+        grid.innerHTML = `<div class="col-span-full text-center py-8 text-slate-500 text-xs">No photos in this category.</div>`;
         return;
       }
       
-      matches.forEach((m, idx) => {
-        let badgeColor = 'bg-blue-500/20 text-blue-300 border-blue-500/30';
-        let badgeText = 'Likely Match';
-        if (m.similarity_score >= 0.58 || m.similarity_pct >= 80) {
-          badgeColor = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-          badgeText = 'High Confidence';
-        } else if (m.similarity_score >= 0.48 || m.similarity_pct >= 55) {
-          badgeColor = 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30';
-          badgeText = 'Confirmed Match';
-        }
+      matches.forEach((m) => {
+        const isPrimary = isPrimaryMatch(m);
+        let badgeColor = isPrimary
+          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+          : 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+        let badgeText = isPrimary ? '★ Primary Action' : 'Secondary / Background';
 
         // Generate SVG or HTML Biometric overlay for each detected face
         const imgW = m.image_width || 1000;
@@ -714,7 +892,7 @@
 
         const card = document.createElement('div');
         card.className = "group relative rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-lg hover:shadow-2xl transition-all cursor-pointer flex flex-col";
-        card.onclick = () => openLightbox(idx);
+        card.onclick = () => openLightboxByFilename(m.filename);
         card.innerHTML = `
           <div class="aspect-[4/3] w-full overflow-hidden bg-black/40 relative">
             <img src="${m.preview_url}" alt="${m.filename}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
@@ -765,26 +943,28 @@
 
     // --- Lightbox with Full Biometric Inspector ---
     function openLightbox(index) {
+      const activeList = filteredMatches.length ? filteredMatches : currentMatches;
       currentLightboxIdx = index;
-      const m = currentMatches[currentLightboxIdx];
+      const m = activeList[currentLightboxIdx];
+      if (!m) return;
       const img = document.getElementById('lightboxImg');
       img.src = m.preview_url;
       document.getElementById('lightboxTitle').textContent = m.filename;
       
       const badge = document.getElementById('lightboxBadge');
-      if (m.similarity_score >= 0.58 || m.similarity_pct >= 80) {
+      if (m.similarity_score >= 0.44) {
         badge.className = 'text-[10px] px-2 py-0.5 rounded-full font-mono border bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-        badge.textContent = `${m.similarity_pct}% High Confidence`;
+        badge.textContent = `★ Primary Action (${m.similarity_pct}%)`;
       } else {
-        badge.className = 'text-[10px] px-2 py-0.5 rounded-full font-mono border bg-cyan-500/20 text-cyan-300 border-cyan-500/30';
-        badge.textContent = `${m.similarity_pct}% Confirmed Match`;
+        badge.className = 'text-[10px] px-2 py-0.5 rounded-full font-mono border bg-blue-500/20 text-blue-300 border-blue-500/30';
+        badge.textContent = `Secondary Match (${m.similarity_pct}%)`;
       }
 
       // Generate Biometric Breakdown pills
       const bioDiv = document.getElementById('lightboxBiometrics');
       const bestBio = (m.biometrics && m.biometrics.length > 0) ? m.biometrics.find(b => b.is_match) || m.biometrics[0] : null;
 
-      let bioPills = `<span>• Photo ${index + 1} of ${currentMatches.length}</span>`;
+      let bioPills = `<span>• Photo ${index + 1} of ${activeList.length}</span>`;
       bioPills += `<span class="text-cyan-300 font-semibold">ArcFace Sim: ${m.similarity_score.toFixed(4)}</span>`;
       if (bestBio) {
         bioPills += `<span>Confidence: ${(bestBio.confidence * 100).toFixed(1)}%</span>`;
@@ -806,7 +986,8 @@
       overlay.innerHTML = '';
       if (!showBiometricHUD) return;
 
-      const m = currentMatches[currentLightboxIdx];
+      const activeList = filteredMatches.length ? filteredMatches : currentMatches;
+      const m = activeList[currentLightboxIdx];
       const img = document.getElementById('lightboxImg');
       if (!m || !m.biometrics || !img.naturalWidth || !img.clientWidth) return;
 
@@ -867,13 +1048,15 @@
 
     function prevImage(e) {
       e.stopPropagation();
-      currentLightboxIdx = (currentLightboxIdx - 1 + currentMatches.length) % currentMatches.length;
+      const activeList = filteredMatches.length ? filteredMatches : currentMatches;
+      currentLightboxIdx = (currentLightboxIdx - 1 + activeList.length) % activeList.length;
       openLightbox(currentLightboxIdx);
     }
 
     function nextImage(e) {
       e.stopPropagation();
-      currentLightboxIdx = (currentLightboxIdx + 1) % currentMatches.length;
+      const activeList = filteredMatches.length ? filteredMatches : currentMatches;
+      currentLightboxIdx = (currentLightboxIdx + 1) % activeList.length;
       openLightbox(currentLightboxIdx);
     }
 

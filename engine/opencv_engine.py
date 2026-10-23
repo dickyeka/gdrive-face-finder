@@ -180,6 +180,54 @@ class OpenCVEngine(BaseFaceEngine):
 
         return results
 
+    def extract_reference_encodings(self, image_path: str) -> List[List[float]]:
+        """
+        Extract primary foreground face from a reference photo and generate
+        multi-scale + horizontal-flip augmented embeddings for high-recall
+        multi-angle and distant-face matching.
+        """
+        img, raw_faces = self._load_and_detect(image_path)
+        if len(raw_faces) == 0:
+            return []
+
+        # Select ONLY the primary (largest area) foreground face
+        raw_sorted = sorted(raw_faces, key=lambda f: float(f[2]) * float(f[3]), reverse=True)
+        primary_face = raw_sorted[0]
+        aligned = self._recognizer.alignCrop(img, primary_face)
+
+        if not self.is_arcface_enabled:
+            return [self._recognizer.feature(aligned)[0].tolist()]
+
+        flipped = self._cv2.flip(aligned, 1)
+        small_orig = self._cv2.resize(
+            self._cv2.resize(aligned, (40, 40), interpolation=self._cv2.INTER_AREA),
+            (112, 112),
+            interpolation=self._cv2.INTER_LINEAR,
+        )
+        small_flip = self._cv2.resize(
+            self._cv2.resize(flipped, (40, 40), interpolation=self._cv2.INTER_AREA),
+            (112, 112),
+            interpolation=self._cv2.INTER_LINEAR,
+        )
+
+        vecs: List[List[float]] = []
+        for variant in (aligned, flipped, small_orig, small_flip):
+            blob = self._cv2.dnn.blobFromImage(
+                variant,
+                1.0 / 127.5,
+                (112, 112),
+                (127.5, 127.5, 127.5),
+                swapRB=True,
+            )
+            self._arcface_net.setInput(blob)
+            feat = self._arcface_net.forward()[0]
+            norm = float(np.linalg.norm(feat))
+            if norm > 1e-6:
+                feat = feat / norm
+            vecs.append(feat.tolist())
+
+        return vecs
+
     def compute_distance(
         self, encoding1: List[float], encoding2: List[float]
     ) -> float:
