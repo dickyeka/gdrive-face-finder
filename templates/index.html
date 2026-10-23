@@ -1,274 +1,458 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Google Drive Face Finder — Biometric AI Photo Search</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Google Drive Face Finder: YuNet &amp; ArcFace 512-d Album Search</title>
+  <!--
+    Design Direction & Decisions (see DESIGN.md, R-31 / R-37):
+    - Design Read: Local computer-vision photo indexing workbench for athletes and photographers, in a high-contrast darkroom/lightroom technical studio style, dial ENERGY 2 / RHYTHM 2 / MOTION 1.
+    - Color Palette: Neutral slate surfaces (#0b0f19 darkroom / #f8fafc daylight) prevent color cast on photographs; single sky-blue accent (#0369a1) marks primary actions; semantic emerald (#15803d / #22c55e) marks primary verified matches.
+    - Layout & Mobile Reflow (R-03): Multi-state responsive reflow from 320px phone to 1440px desktop (1-col stack on phone, 2-col gallery on tablet portrait, 2-col workbench + 3/4-col gallery on desktop; mobile card index below 768px and 6-column table at 768px+).
+    - Typography: Fluid clamp() headings in Plus Jakarta Sans sentence case; JetBrains Mono strictly for similarity decimals, pixel coordinates, filenames, and URLs.
+    - Spacing & Radius: Mobile register padding (16px) stepping up to desktop (24px); two radius tokens (8px rounded-lg for controls/tags, 12px rounded-xl for panels/cards); elevation shadow reserved only for active modal dialogs.
+  -->
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
   <style>
+    :root,
+    html[data-theme="dark"] {
+      --bg-page: #0b0f19;
+      --bg-panel: #111827;
+      --bg-subtle: #1e293b;
+      --bg-input: #0f172a;
+      --text-primary: #f8fafc;
+      --text-secondary: #cbd5e1;
+      --text-muted: #94a3b8;
+      --border-color: #334155;
+      --accent: #0369a1;
+      --accent-hover: #075985;
+      --accent-text: #ffffff;
+      --accent-soft-bg: rgba(14, 165, 233, 0.16);
+      --accent-soft-text: #7dd3fc;
+      --accent-soft-border: rgba(56, 189, 248, 0.45);
+      --match-soft-bg: rgba(34, 197, 94, 0.16);
+      --match-soft-text: #86efac;
+      --match-soft-border: rgba(74, 222, 128, 0.45);
+      --danger-soft-bg: rgba(239, 68, 68, 0.15);
+      --danger-soft-text: #fca5a5;
+      --danger-soft-border: rgba(248, 113, 113, 0.45);
+      --focus-ring: #38bdf8;
+    }
+
+    html[data-theme="light"] {
+      --bg-page: #f8fafc;
+      --bg-panel: #ffffff;
+      --bg-subtle: #f1f5f9;
+      --bg-input: #ffffff;
+      --text-primary: #0f172a;
+      --text-secondary: #334155;
+      --text-muted: #475569;
+      --border-color: #cbd5e1;
+      --accent: #0369a1;
+      --accent-hover: #075985;
+      --accent-text: #ffffff;
+      --accent-soft-bg: #e0f2fe;
+      --accent-soft-text: #075985;
+      --accent-soft-border: #7dd3fc;
+      --match-soft-bg: #dcfce7;
+      --match-soft-text: #166534;
+      --match-soft-border: #86efac;
+      --danger-soft-bg: #fee2e2;
+      --danger-soft-text: #991b1b;
+      --danger-soft-border: #fca5a5;
+      --focus-ring: #0284c7;
+    }
+
     body {
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: radial-gradient(circle at 50% 0%, #131c31 0%, #080c14 80%);
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      overflow-x: hidden;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
+
     .font-mono {
       font-family: 'JetBrains Mono', monospace;
     }
-    @keyframes scanline {
-      0% { top: 5%; opacity: 0.3; }
-      50% { top: 90%; opacity: 1; }
-      100% { top: 5%; opacity: 0.3; }
+
+    /* Fluid typography scaled across phone, tablet, and desktop (R-03, R-06) */
+    .fluid-h1 {
+      font-size: clamp(1.35rem, 2.8vw + 0.5rem, 2rem);
+      line-height: 1.2;
     }
-    .animate-scanline {
-      animation: scanline 2.4s ease-in-out infinite;
+
+    .fluid-h2 {
+      font-size: clamp(1.15rem, 2vw + 0.4rem, 1.5rem);
+      line-height: 1.25;
     }
-    .reticle-corner {
-      position: absolute;
-      width: 12px;
-      height: 12px;
-      border-color: #22d3ee;
+
+    .fluid-h3 {
+      font-size: clamp(1rem, 1.4vw + 0.35rem, 1.15rem);
+      line-height: 1.3;
+    }
+
+    .theme-panel {
+      background-color: var(--bg-panel);
+      border-color: var(--border-color);
+    }
+
+    .theme-subtle {
+      background-color: var(--bg-subtle);
+      border-color: var(--border-color);
+    }
+
+    .theme-input {
+      background-color: var(--bg-input);
+      border-color: var(--border-color);
+      color: var(--text-primary);
+    }
+
+    .theme-text-primary {
+      color: var(--text-primary);
+    }
+
+    .theme-text-secondary {
+      color: var(--text-secondary);
+    }
+
+    .theme-text-muted {
+      color: var(--text-muted);
+    }
+
+    .theme-border {
+      border-color: var(--border-color);
+    }
+
+    .btn-primary {
+      background-color: var(--accent);
+      color: var(--accent-text);
+    }
+    .btn-primary:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .badge-primary {
+      background-color: var(--match-soft-bg);
+      color: var(--match-soft-text);
+      border: 1px solid var(--match-soft-border);
+    }
+
+    .badge-secondary {
+      background-color: var(--accent-soft-bg);
+      color: var(--accent-soft-text);
+      border: 1px solid var(--accent-soft-border);
+    }
+
+    .banner-error {
+      background-color: var(--danger-soft-bg);
+      color: var(--danger-soft-text);
+      border: 1px solid var(--danger-soft-border);
+    }
+
+    /* Touch & active feedback for mobile tap targets (R-03) */
+    button:active,
+    a:active,
+    [role="button"]:active {
+      transform: scale(0.99);
+      opacity: 0.88;
+    }
+
+    /* High-visibility keyboard focus indicator (R-32) */
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    [tabindex="0"]:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
     }
   </style>
 </head>
-<body class="text-slate-100 min-h-screen antialiased flex flex-col">
+<body class="min-h-screen antialiased flex flex-col">
 
-  <!-- Navigation Bar -->
-  <header class="border-b border-slate-800/80 bg-slate-900/40 backdrop-blur-md sticky top-0 z-40">
-    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/25">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  <!-- Compact Single-Row Sticky Top Workbench Bar (Never wraps on 320px phones, R-03) -->
+  <header class="border-b theme-panel sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-3.5 sm:px-6 py-1.5 sm:py-2.5 min-h-[52px] sm:min-h-[60px] flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <!-- Viewfinder frame icon: represents facial bounding-box detection (R-04) -->
+        <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg btn-primary flex items-center justify-center shrink-0" aria-hidden="true">
+          <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V6a2 2 0 012-2h2M4 16v2a2 2 0 002 2h2m8-16h2a2 2 0 012 2v2m-4 12h2a2 2 0 002-2v-2M9 12a3 3 0 106 0 3 3 0 00-6 0z" />
           </svg>
         </div>
-        <div>
-          <span class="font-bold text-base tracking-tight text-white">Drive Face Finder</span>
-          <span id="engineBadge" class="text-[11px] ml-2 px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-medium">
-            YuNet + ArcFace 512-d Biometrics
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="font-bold text-sm sm:text-base tracking-tight theme-text-primary truncate">Drive Face Finder</span>
+          <span id="engineBadge" class="hidden md:inline-block text-xs px-2 py-0.5 rounded-lg theme-subtle border theme-text-secondary font-mono shrink-0">
+            YuNet + ArcFace 512-d
           </span>
         </div>
       </div>
-      <div class="flex items-center gap-3 text-xs text-slate-400">
-        <span class="hidden sm:inline">Biometric Landmark & Hypersphere Verification</span>
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span class="text-emerald-400 font-medium">Ready</span>
+
+      <div class="flex items-center gap-2.5 shrink-0">
+        <span class="hidden lg:inline text-xs theme-text-secondary">Local ONNX Face Indexing</span>
+        <!-- Working Light / Dark Theme Toggle (44px min tap target, R-03, R-21, R-34) -->
+        <button type="button" id="themeToggleBtn" onclick="toggleTheme()"
+                class="min-h-[44px] px-3 sm:px-3.5 py-2 rounded-lg border theme-subtle theme-text-primary text-xs font-semibold flex items-center gap-1.5 transition-colors">
+          <svg id="themeIcon" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <span id="themeToggleLabel">Light Theme</span>
+        </button>
       </div>
     </div>
   </header>
 
-  <!-- Main Content Container -->
-  <main class="flex-1 max-w-6xl mx-auto px-4 py-8 w-full space-y-8">
+  <!-- Main Content Container (Mobile-scaled spacing stepping up at sm/lg, R-03, R-05) -->
+  <main class="flex-1 max-w-6xl mx-auto px-3.5 sm:px-6 py-5 sm:py-8 w-full space-y-5 sm:space-y-8">
 
-    <!-- Hero Section -->
-    <div class="text-center max-w-2xl mx-auto space-y-2">
-      <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-        Find Your Photos in Any <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-300">Google Drive Album</span>
+    <!-- Workbench Header -->
+    <div class="max-w-3xl space-y-1.5 sm:space-y-2">
+      <h1 class="fluid-h1 font-bold tracking-tight theme-text-primary">
+        Find Your Photos in a Google Drive Album
       </h1>
-      <p class="text-sm text-slate-400">
-        Upload 1 to 5 photos or capture a live biometric selfie. Our local 512-d ArcFace engine identifies your action shots with Google Photos-grade precision.
+      <p class="text-xs sm:text-sm theme-text-secondary leading-relaxed">
+        Upload 1 to 5 reference photos or capture a webcam frame. The local 512-d ArcFace engine extracts primary subject embeddings and separates close action shots from wide-angle background appearances.
       </p>
     </div>
 
-    <!-- Search Form Card -->
-    <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 sm:p-8 backdrop-blur-xl shadow-2xl space-y-6">
-      <form id="scanForm" class="space-y-6" onsubmit="handleScanSubmit(event)">
+    <!-- Inline Error / Validation Status Banner (R-27) -->
+    <div id="statusBanner" role="alert" class="hidden rounded-xl p-4 banner-error flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div class="flex items-start gap-3">
+        <svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+        </svg>
+        <div>
+          <p id="statusBannerTitle" class="text-sm font-semibold">Action needed</p>
+          <p id="statusBannerMessage" class="text-xs mt-0.5"></p>
+        </div>
+      </div>
+      <button type="button" onclick="hideStatusBanner()" class="w-full sm:w-auto min-h-[44px] px-3.5 py-2 rounded-lg border theme-panel theme-text-primary text-xs font-semibold shrink-0">
+        Dismiss
+      </button>
+    </div>
+
+    <!-- Search Form Panel (Stacks on phone & tablet portrait; 2 columns at lg 1024px+, R-03) -->
+    <section aria-label="Album scan configuration" class="theme-panel border rounded-xl p-4 sm:p-6 space-y-5 sm:space-y-6">
+      <form id="scanForm" class="space-y-5 sm:space-y-6" onsubmit="handleScanSubmit(event)" novalidate>
         
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6">
           
           <!-- Column 1: Multi-Photo Reference Upload & Live Webcam Capture -->
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                1. Reference Photos (<span id="photoCountLabel">0</span> Selected)
+          <div class="space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <label for="refInput" class="block text-sm font-semibold theme-text-primary">
+                1. Reference Photos (<span id="photoCountLabel">0</span> of 5 selected)
               </label>
               
-              <!-- Live Biometric Webcam Trigger Button -->
+              <!-- Live Biometric Webcam Trigger Button (Full width on phone, auto on sm+, 44px min height, R-03) -->
               <button type="button" onclick="openWebcamModal(event)" 
-                      class="px-2.5 py-1 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-[11px] font-semibold flex items-center gap-1.5 shadow-md shadow-cyan-600/20 transition-all active:scale-95">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                <span>Live Biometric Capture</span>
+                      class="w-full sm:w-auto min-h-[44px] px-3.5 py-2 rounded-lg border theme-subtle theme-text-primary hover:opacity-90 text-xs font-semibold flex items-center justify-center gap-2 transition-colors">
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <span>Capture Webcam Selfie</span>
               </button>
             </div>
             
-            <!-- Upload Dropzone -->
-            <div id="dropzone" 
-                 onclick="document.getElementById('refInput').click()" 
-                 class="relative border-2 border-dashed border-slate-700 hover:border-cyan-500 rounded-2xl min-h-[195px] flex flex-col items-center justify-center cursor-pointer transition-all bg-slate-950/40 hover:bg-slate-900/80 p-4">
+            <!-- Accessible Upload Dropzone (R-32) -->
+            <div id="dropzone"
+                 role="button"
+                 tabindex="0"
+                 aria-label="Upload 1 to 5 reference photos"
+                 onclick="document.getElementById('refInput').click()"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('refInput').click();}"
+                 class="relative border-2 border-dashed theme-border rounded-xl min-h-[168px] sm:min-h-[195px] flex flex-col items-center justify-center cursor-pointer transition-colors theme-subtle p-3.5 sm:p-4">
               
               <input type="file" id="refInput" name="reference_images" accept="image/*" multiple class="hidden" onchange="handleFileSelect(event)" />
               
               <!-- Empty Prompt -->
-              <div id="uploadPrompt" class="text-center p-4 space-y-2">
-                <div class="w-10 h-10 rounded-full bg-slate-800 group-hover:bg-cyan-600/20 text-slate-400 group-hover:text-cyan-400 mx-auto flex items-center justify-center transition-colors">
+              <div id="uploadPrompt" class="text-center p-3 sm:p-4 space-y-2">
+                <div class="w-10 h-10 rounded-lg theme-panel border theme-text-secondary mx-auto flex items-center justify-center">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                 </div>
-                <p class="text-xs font-semibold text-slate-300">Click to upload or drag & drop files</p>
-                <p class="text-[11px] text-slate-500">Upload 1 to 5 photos or use the Webcam button above</p>
+                <p class="text-sm font-semibold theme-text-primary">Tap to select photos or drag and drop</p>
+                <p class="text-xs theme-text-secondary">Supports 1 to 5 JPG or PNG reference photos</p>
               </div>
 
-              <!-- Multi-Image Thumbnails Tray -->
-              <div id="thumbnailsTray" class="hidden w-full grid grid-cols-3 sm:grid-cols-4 gap-2.5 z-10">
+              <!-- Multi-Image Thumbnails Tray (2 cols on phone, 3 on sm/tablet, 4 on xl so 44px remove buttons never crowd, R-03) -->
+              <div id="thumbnailsTray" class="hidden w-full grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 z-10">
                 <!-- Injected via JavaScript -->
               </div>
             </div>
 
-            <!-- Pro Tip Note -->
-            <p class="text-[11px] text-slate-400 flex items-center gap-1.5">
-              <svg class="w-3.5 h-3.5 text-cyan-400 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
-              <span>Tip: 2–3 photos from different angles (front + side profile) maximize action shot recall.</span>
+            <p class="text-xs theme-text-secondary">
+              Tip: Uploading 2 to 3 photos from front and side angles improves recall on wide-angle action shots.
             </p>
           </div>
 
           <!-- Column 2: Drive URL & Settings -->
           <div class="space-y-4 flex flex-col justify-between">
             <div class="space-y-2">
-              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              <label for="folderUrl" class="block text-sm font-semibold theme-text-primary">
                 2. Google Drive Folder Link
               </label>
-              <div class="relative">
+              <div>
                 <input type="url" id="folderUrl" name="folder_url" required
                        placeholder="https://drive.google.com/drive/folders/..." 
                        value="https://drive.google.com/drive/folders/1qiRv2uPgOR0UmVCaD20wgYNR1QYH8uEi"
-                       class="w-full bg-slate-950/60 border border-slate-700 focus:border-cyan-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-all font-mono text-xs" />
+                       class="w-full min-h-[44px] theme-input border rounded-lg px-3.5 py-2.5 text-xs font-mono transition-colors" />
               </div>
-              <p class="text-[11px] text-slate-500">Make sure the folder sharing is set to "Anyone with the link can view".</p>
+              <p class="text-xs theme-text-secondary">Folder sharing must be set to "Anyone with the link can view".</p>
             </div>
 
             <!-- ArcFace Cosine Sensitivity Slider -->
-            <div class="space-y-2 bg-slate-950/40 p-3.5 rounded-xl border border-slate-800">
-              <div class="flex items-center justify-between text-xs">
-                <span class="font-medium text-slate-300">Biometric Sensitivity (ArcFace Cosine)</span>
-                <span id="toleranceLabel" class="font-mono text-cyan-400 font-semibold">0.33 (Full Recall — Primary + Background)</span>
+            <div class="space-y-2.5 theme-subtle p-3.5 sm:p-4 rounded-xl border">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                <label for="thresholdSlider" class="font-semibold theme-text-primary">ArcFace Cosine Threshold</label>
+                <span id="toleranceLabel" class="font-mono theme-text-primary font-semibold">0.33 (Full Recall: Primary + Background)</span>
               </div>
-              <input type="range" id="thresholdSlider" name="threshold" min="0.30" max="0.60" step="0.01" value="0.33"
-                     oninput="updateToleranceLabel(this.value)"
-                     class="w-full accent-cyan-500 cursor-pointer h-1.5 bg-slate-700 rounded-lg" />
-              <div class="flex justify-between text-[10px] text-slate-500 font-medium">
-                <span>0.30 (High Recall)</span>
-                <span>0.33 (Recommended — Primary + Secondary)</span>
+              <div class="py-1.5">
+                <input type="range" id="thresholdSlider" name="threshold" min="0.30" max="0.60" step="0.01" value="0.33"
+                       oninput="updateToleranceLabel(this.value)"
+                       class="w-full accent-sky-600 cursor-pointer h-2.5 rounded-lg" />
+              </div>
+              <div class="flex justify-between text-xs theme-text-secondary gap-2">
+                <span>0.30 (Recall)</span>
+                <span>0.33 (Default)</span>
                 <span>0.60 (Strict)</span>
               </div>
             </div>
 
-            <!-- Submit Button -->
+            <!-- Submit Button (48px height, R-03) -->
             <button type="submit" id="submitBtn"
-                    class="w-full bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-semibold py-3.5 px-6 rounded-xl shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition-all transform active:scale-[0.99]">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    class="w-full min-h-[48px] btn-primary font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors">
+              <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
               <span>Scan Album for Matches</span>
             </button>
           </div>
 
         </div>
       </form>
-    </div>
+    </section>
 
-    <!-- Live Progress Section (Hidden initially) -->
-    <div id="progressSection" class="hidden bg-slate-900/60 border border-slate-800 rounded-3xl p-6 backdrop-blur-xl shadow-xl space-y-4">
+    <!-- Initial Empty State Section (R-27) -->
+    <section id="emptyStateSection" class="theme-panel border rounded-xl p-5 sm:p-8 text-center space-y-3">
+      <h2 class="text-base font-bold theme-text-primary">No Album Scan Loaded Yet</h2>
+      <p class="text-xs theme-text-secondary max-w-md mx-auto">
+        Select 1 to 5 reference photos above and tap "Scan Album for Matches" to index the Google Drive folder and view your Primary and Secondary matches here.
+      </p>
+      <div class="pt-1">
+        <button type="button" onclick="document.getElementById('refInput').click()"
+                class="w-full sm:w-auto min-h-[44px] px-4 py-2 rounded-lg border theme-subtle theme-text-primary text-xs font-semibold">
+          Select Reference Photos to Begin
+        </button>
+      </div>
+    </section>
+
+    <!-- Live Progress Section (Loading State, R-27) -->
+    <section id="progressSection" aria-live="polite" class="hidden theme-panel border rounded-xl p-4 sm:p-6 space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div class="flex items-center gap-3">
-          <div class="w-3 h-3 rounded-full bg-cyan-500 animate-ping"></div>
-          <div>
-            <h3 id="progressTitle" class="text-sm font-semibold text-white">Scanning Album in Progress...</h3>
-            <p id="progressDetail" class="text-xs text-slate-400">Connecting to Google Drive...</p>
-          </div>
+        <div class="min-w-0">
+          <h3 id="progressTitle" class="text-sm font-semibold theme-text-primary">Scanning Album in Progress...</h3>
+          <p id="progressDetail" class="text-xs theme-text-secondary mt-0.5 truncate">Connecting to Google Drive...</p>
         </div>
-        <div class="text-right">
-          <span id="matchCounter" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <div class="shrink-0">
+          <span id="matchCounter" class="inline-block text-xs font-semibold px-3 py-1.5 rounded-lg badge-primary font-mono">
             0 Matches Found
           </span>
         </div>
       </div>
 
-      <!-- Animated Progress Bar -->
-      <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
-        <div id="progressBar" class="bg-gradient-to-r from-cyan-500 via-blue-500 to-emerald-400 h-2.5 rounded-full transition-all duration-300 w-0"></div>
+      <!-- Progress Bar -->
+      <div class="w-full theme-subtle rounded-lg h-2.5 overflow-hidden border">
+        <div id="progressBar" class="btn-primary h-2.5 transition-all duration-300 w-0"></div>
       </div>
-      <div class="flex justify-between text-[11px] text-slate-500 font-mono">
+      <div class="flex justify-between text-xs theme-text-secondary font-mono">
         <span id="processedText">0 / 0 scanned</span>
         <span id="percentText">0%</span>
       </div>
-    </div>
+    </section>
 
-    <!-- Results Section (Hidden initially) -->
-    <div id="resultsSection" class="hidden space-y-6">
+    <!-- Results Section -->
+    <section id="resultsSection" class="hidden space-y-5 sm:space-y-6">
       
-      <!-- Results Action Bar -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-4">
+      <!-- Results Action Bar (Full-width stacked controls on mobile, inline on sm+, R-03) -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b theme-border gap-3.5">
         <div>
-          <h2 id="resultsHeading" class="text-2xl font-bold tracking-tight text-white">Matching Photos</h2>
-          <p id="resultsSubheading" class="text-xs text-slate-400 mt-0.5">Click any photo to inspect full biometric landmarks and metrics.</p>
+          <h2 id="resultsHeading" class="fluid-h2 font-bold tracking-tight theme-text-primary">Matching Photos</h2>
+          <p id="resultsSubheading" class="text-xs theme-text-secondary mt-1">Tap or press Enter on any photo to inspect 5-point facial landmarks and similarity scores.</p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
           <!-- Biometric HUD Overlay Toggle Button -->
           <button type="button" id="hudToggleBtn" onclick="toggleBiometricHUD()" 
-                  class="px-3 py-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-medium flex items-center gap-2 transition-all shadow-sm">
-            <span id="hudToggleDot" class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                  class="w-full sm:w-auto min-h-[44px] px-3.5 py-2 rounded-lg border badge-secondary text-xs font-semibold flex items-center justify-center gap-2 transition-colors">
+            <span id="hudToggleDot" class="w-2 h-2 rounded-full bg-current"></span>
             <span id="hudToggleText">Biometric HUD: ON</span>
           </button>
 
           <!-- Download ZIP Button -->
-          <a id="downloadZipBtn" href="#" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <a id="downloadZipBtn" href="/api/download-zip/12f9bed8" class="w-full sm:w-auto min-h-[44px] px-4 py-2 rounded-lg btn-primary text-xs font-semibold flex items-center justify-center gap-2 transition-colors">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
             <span>Download All Matches (.ZIP)</span>
           </a>
         </div>
       </div>
 
-      <!-- Category Filter Tabs (Same layout as discovered_photos.md) -->
-      <div class="flex flex-wrap items-center gap-2">
-        <button type="button" id="filterAllBtn" onclick="setCategoryFilter('all')"
-                class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-cyan-600 text-white shadow-md shadow-cyan-600/20 transition-all">
+      <!-- Category Filter Tabs (Full-width stacked on phone, inline row on sm+, R-03) -->
+      <div class="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2" role="tablist" aria-label="Filter matched photos by category">
+        <button type="button" id="filterAllBtn" role="tab" aria-selected="true" onclick="setCategoryFilter('all')"
+                class="w-full sm:w-auto min-h-[44px] px-4 py-2 rounded-lg text-xs font-semibold btn-primary transition-colors text-center">
           All Matches (<span id="countAll">0</span>)
         </button>
-        <button type="button" id="filterPrimaryBtn" onclick="setCategoryFilter('primary')"
-                class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-all">
-          ★ Primary Solo & Action Shots (<span id="countPrimary">0</span>)
+        <button type="button" id="filterPrimaryBtn" role="tab" aria-selected="false" onclick="setCategoryFilter('primary')"
+                class="w-full sm:w-auto min-h-[44px] px-4 py-2 rounded-lg text-xs font-semibold theme-panel border theme-text-secondary hover:opacity-90 transition-colors text-center">
+          Primary Solo &amp; Action Shots (<span id="countPrimary">0</span>)
         </button>
-        <button type="button" id="filterSecondaryBtn" onclick="setCategoryFilter('secondary')"
-                class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-all">
+        <button type="button" id="filterSecondaryBtn" role="tab" aria-selected="false" onclick="setCategoryFilter('secondary')"
+                class="w-full sm:w-auto min-h-[44px] px-4 py-2 rounded-lg text-xs font-semibold theme-panel border theme-text-secondary hover:opacity-90 transition-colors text-center">
           Secondary / Background Appearances (<span id="countSecondary">0</span>)
         </button>
       </div>
 
-      <!-- Section 1: Primary Solo & Action Shots -->
-      <div id="primarySection" class="space-y-4 pt-2">
-        <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+      <!-- Section 1: Primary Solo & Action Shots (4 responsive states: 1 col -> 2 col -> 3 col -> 4 col, R-03) -->
+      <div id="primarySection" class="space-y-3.5 sm:space-y-4 pt-1 sm:pt-2">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b theme-border pb-2.5 gap-1.5">
           <div class="flex items-center gap-2.5">
-            <span class="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-bold">★ Primary</span>
-            <h3 id="primarySectionHeading" class="text-lg font-bold text-white tracking-tight">Primary Solo &amp; Action Shots (0 Photos)</h3>
+            <span class="px-2.5 py-1 rounded-lg badge-primary text-xs font-semibold shrink-0">Primary</span>
+            <h3 id="primarySectionHeading" class="fluid-h3 font-bold theme-text-primary tracking-tight">Primary Solo &amp; Action Shots (0 Photos)</h3>
           </div>
-          <span class="text-xs text-slate-400 font-mono">High-Confidence Foreground &amp; Action Matches</span>
+          <span class="text-xs theme-text-secondary">High-Confidence Foreground &amp; Action Matches (Sim &gt;= 0.42)</span>
         </div>
-        <div id="primaryGalleryGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        <div id="primaryGalleryGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 sm:gap-5">
           <!-- Rendered dynamically -->
         </div>
       </div>
 
-      <!-- Section 2: Secondary / Background Appearances -->
-      <div id="secondarySection" class="space-y-4 pt-4">
-        <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+      <!-- Section 2: Secondary / Background Appearances (4 responsive states: 1 col -> 2 col -> 3 col -> 4 col, R-03) -->
+      <div id="secondarySection" class="space-y-3.5 sm:space-y-4 pt-2 sm:pt-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b theme-border pb-2.5 gap-1.5">
           <div class="flex items-center gap-2.5">
-            <span class="px-2.5 py-1 rounded-lg bg-blue-500/15 text-blue-300 border border-blue-500/30 text-xs font-bold">Secondary</span>
-            <h3 id="secondarySectionHeading" class="text-lg font-bold text-white tracking-tight">Secondary / Background Appearances (0 Photos)</h3>
+            <span class="px-2.5 py-1 rounded-lg badge-secondary text-xs font-semibold shrink-0">Secondary</span>
+            <h3 id="secondarySectionHeading" class="fluid-h3 font-bold theme-text-primary tracking-tight">Secondary / Background Appearances (0 Photos)</h3>
           </div>
-          <span class="text-xs text-slate-400 font-mono">Wide-Angle Midfield, Side-Profile &amp; Background Shots</span>
+          <span class="text-xs theme-text-secondary">Wide-Angle Midfield, Side-Profile &amp; Background Shots (0.335 &lt;= Sim &lt; 0.42)</span>
         </div>
-        <div id="secondaryGalleryGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        <div id="secondaryGalleryGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 sm:gap-5">
           <!-- Rendered dynamically -->
         </div>
       </div>
 
-      <!-- Direct Google Drive View & Full-Resolution Download Links Table -->
-      <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 backdrop-blur-xl shadow-xl space-y-4">
+      <!-- Section 3: Direct Google Drive View & Full-Resolution Download Links (Reflows to Mobile Cards below md, Table at md+, R-03) -->
+      <div class="theme-panel border rounded-xl p-4 sm:p-6 space-y-4">
         <div>
-          <h3 class="text-lg font-bold text-white">Direct Google Drive View & Full-Resolution Download Links</h3>
-          <p class="text-xs text-slate-400">Complete biometric match table sorted by ArcFace 512-d Cosine Similarity.</p>
+          <h3 class="fluid-h3 font-bold theme-text-primary">Direct Google Drive View &amp; Full-Resolution Download Links</h3>
+          <p class="text-xs theme-text-secondary mt-0.5">Complete biometric match index sorted by ArcFace 512-d Cosine Similarity.</p>
         </div>
-        <div class="overflow-x-auto">
+
+        <!-- Mobile Reflow Card List (< 768px, zero horizontal scroll, R-03) -->
+        <div id="matchesMobileList" class="block md:hidden space-y-2.5">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Tablet & Desktop Table (768px+, R-03) -->
+        <div class="hidden md:block overflow-x-auto">
           <table class="w-full text-left border-collapse text-xs">
             <thead>
-              <tr class="border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[11px]">
+              <tr class="border-b theme-border theme-text-secondary text-xs font-semibold">
                 <th class="py-3 px-3">#</th>
                 <th class="py-3 px-3">Photo File</th>
                 <th class="py-3 px-3">Category</th>
@@ -277,56 +461,41 @@
                 <th class="py-3 px-3 text-right">Google Drive Links</th>
               </tr>
             </thead>
-            <tbody id="matchesTableBody" class="divide-y divide-slate-800/60 font-mono">
+            <tbody id="matchesTableBody" class="divide-y theme-border">
               <!-- Populated dynamically -->
             </tbody>
           </table>
         </div>
       </div>
-    </div>
+    </section>
 
   </main>
 
-  <!-- Live Webcam Biometric Capture Modal -->
-  <div id="webcamModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 max-w-lg w-full flex flex-col items-center shadow-2xl relative space-y-4">
+  <!-- Live Webcam Biometric Capture Modal (Fluid guide & dvh sizing, R-03, R-10, R-12) -->
+  <div id="webcamModal" role="dialog" aria-modal="true" aria-labelledby="webcamModalTitle" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3.5 sm:p-4">
+    <div class="theme-panel border rounded-xl p-4 sm:p-6 max-w-lg w-full max-h-[94dvh] overflow-y-auto flex flex-col items-center shadow-xl relative space-y-4">
       
-      <!-- Close Button -->
-      <button onclick="closeWebcamModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors">
+      <!-- Close Button (44x44px min tap target, R-03) -->
+      <button type="button" onclick="closeWebcamModal()" aria-label="Close webcam scanner" class="min-w-[44px] min-h-[44px] absolute top-3 right-3 theme-text-secondary hover:opacity-80 p-2 rounded-lg theme-subtle flex items-center justify-center transition-colors">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
 
       <!-- Modal Header -->
-      <div class="text-center space-y-1">
-        <div class="flex items-center justify-center gap-2">
-          <div class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></div>
-          <h3 class="text-base font-bold text-white tracking-tight">Live Biometric Face Scanner</h3>
-        </div>
-        <p class="text-xs text-slate-400">Position your face inside the biometric reticle for optimal extraction.</p>
+      <div class="text-center space-y-1 pr-10 pl-4 sm:pl-10">
+        <h3 id="webcamModalTitle" class="text-base font-bold theme-text-primary tracking-tight">Live Biometric Face Scanner</h3>
+        <p class="text-xs theme-text-secondary">Position your face inside the oval guide for reference extraction.</p>
       </div>
 
-      <!-- Video Feed with Biometric Scanning Frame -->
-      <div class="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-black flex items-center justify-center border border-slate-800 shadow-inner">
+      <!-- Video Feed with Fluid Percentage Alignment Guide (Never overflows on 320px phones, R-03) -->
+      <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-black flex items-center justify-center border theme-border">
         <video id="webcamVideo" autoplay playsinline muted class="w-full h-full object-cover -scale-x-100"></video>
         <canvas id="webcamCanvas" class="hidden"></canvas>
 
-        <!-- Biometric Oval HUD Overlay -->
+        <!-- Fluid Oval Framing Guide Overlay -->
         <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
-          <div class="relative w-44 h-60 rounded-[50%] border-2 border-cyan-400/80 shadow-[0_0_25px_rgba(34,211,238,0.35)] flex items-center justify-center overflow-hidden">
-            <!-- Sweeping Laser Scanline -->
-            <div class="absolute w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-scanline"></div>
-          </div>
-          
-          <!-- Targeting Reticle Corners -->
-          <div class="absolute top-6 left-6 w-5 h-5 border-t-2 border-l-2 border-cyan-400/80"></div>
-          <div class="absolute top-6 right-6 w-5 h-5 border-t-2 border-r-2 border-cyan-400/80"></div>
-          <div class="absolute bottom-6 left-6 w-5 h-5 border-b-2 border-l-2 border-cyan-400/80"></div>
-          <div class="absolute bottom-6 right-6 w-5 h-5 border-b-2 border-r-2 border-cyan-400/80"></div>
-
-          <!-- Sensor Active Badge -->
-          <div class="absolute bottom-3 px-3 py-1 rounded-full bg-black/75 backdrop-blur-md border border-cyan-500/30 text-[10px] font-mono text-cyan-300 flex items-center gap-1.5 shadow-lg">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>Biometric Sensor Active</span>
+          <div class="relative w-[42%] max-w-[176px] h-[70%] max-h-[236px] rounded-[50%] border-2 border-sky-400"></div>
+          <div class="absolute bottom-2.5 px-2.5 py-1 rounded-lg bg-black/80 border border-slate-700 text-xs font-mono text-slate-200">
+            Camera stream active
           </div>
         </div>
 
@@ -334,13 +503,13 @@
         <div id="captureFlash" class="absolute inset-0 bg-white opacity-0 pointer-events-none transition-opacity duration-200"></div>
       </div>
 
-      <!-- Modal Actions -->
-      <div class="flex items-center justify-between w-full gap-3 pt-2">
-        <button type="button" onclick="closeWebcamModal()" class="w-1/3 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-semibold transition-colors">
+      <!-- Modal Actions (Stacks on narrow phones, row on sm+, 44px min tap targets, R-03) -->
+      <div class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between w-full gap-2.5 pt-1">
+        <button type="button" onclick="closeWebcamModal()" class="w-full sm:w-1/3 min-h-[44px] py-2.5 rounded-lg border theme-subtle theme-text-primary text-xs font-semibold transition-colors">
           Cancel
         </button>
-        <button type="button" onclick="captureWebcamPhoto()" class="w-2/3 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-lg shadow-cyan-600/25 flex items-center justify-center gap-2 transition-all active:scale-98">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <button type="button" onclick="captureWebcamPhoto()" class="w-full sm:w-2/3 min-h-[44px] py-2.5 rounded-lg btn-primary text-xs font-semibold flex items-center justify-center gap-2 transition-colors">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
           <span>Capture Biometric Selfie</span>
         </button>
       </div>
@@ -348,43 +517,61 @@
     </div>
   </div>
 
-  <!-- Lightbox Modal with Biometric Inspector -->
-  <div id="lightbox" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <!-- Controls -->
-    <button onclick="closeLightbox()" class="absolute top-4 right-4 text-white/80 hover:text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-20">
+  <!-- Lightbox Modal with dvh Sizing & Dedicated Mobile Navigation Bar (R-03) -->
+  <div id="lightbox" role="dialog" aria-modal="true" aria-labelledby="lightboxTitle" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4">
+    <!-- Desktop Floating Controls (Hidden on mobile so they never cover the photo, R-03) -->
+    <button type="button" onclick="closeLightbox()" aria-label="Close photo inspector" class="hidden sm:flex min-w-[44px] min-h-[44px] absolute top-4 right-4 text-white p-2 rounded-lg bg-slate-900 border border-slate-700 hover:bg-slate-800 items-center justify-center transition-colors z-20">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
     </button>
-    <button onclick="prevImage(event)" class="absolute left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-20">
+    <button type="button" onclick="prevImage(event)" aria-label="Previous photo" class="hidden sm:flex min-w-[44px] min-h-[44px] absolute left-4 top-1/2 -translate-y-1/2 text-white p-2.5 rounded-lg bg-slate-900 border border-slate-700 hover:bg-slate-800 items-center justify-center transition-colors z-20">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
     </button>
-    <button onclick="nextImage(event)" class="absolute right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-20">
+    <button type="button" onclick="nextImage(event)" aria-label="Next photo" class="hidden sm:flex min-w-[44px] min-h-[44px] absolute right-4 top-1/2 -translate-y-1/2 text-white p-2.5 rounded-lg bg-slate-900 border border-slate-700 hover:bg-slate-800 items-center justify-center transition-colors z-20">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
     </button>
 
-    <div class="max-w-4xl max-h-[92vh] flex flex-col items-center w-full">
-      <!-- Image Stage with Responsive Biometric HUD Overlay -->
-      <div id="lightboxStage" class="relative max-h-[68vh] max-w-full flex items-center justify-center rounded-xl overflow-hidden bg-black/60 shadow-2xl">
-        <img id="lightboxImg" src="" alt="Enlarged photo" class="max-h-[68vh] max-w-full object-contain block" onload="updateLightboxOverlay()" />
+    <div class="max-w-4xl max-h-[94dvh] flex flex-col items-center w-full">
+      <!-- Dedicated Mobile Top Transport Bar (Visible on mobile only, 44px targets with gap, R-03) -->
+      <div class="flex sm:hidden items-center justify-between w-full gap-2 mb-2">
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="prevImage(event)" aria-label="Previous photo" class="min-w-[44px] min-h-[44px] px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs font-semibold flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            <span>Prev</span>
+          </button>
+          <button type="button" onclick="nextImage(event)" aria-label="Next photo" class="min-w-[44px] min-h-[44px] px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs font-semibold flex items-center gap-1">
+            <span>Next</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+        <button type="button" onclick="closeLightbox()" aria-label="Close photo inspector" class="min-w-[44px] min-h-[44px] px-3.5 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs font-semibold flex items-center gap-1.5">
+          <span>Close</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Image Stage with Dynamic Viewport Height (dvh) & Responsive Biometric HUD Overlay -->
+      <div id="lightboxStage" class="relative max-h-[54dvh] sm:max-h-[68dvh] max-w-full flex items-center justify-center rounded-xl overflow-hidden bg-black shadow-xl">
+        <img id="lightboxImg" src="" alt="Enlarged matched photo" class="max-h-[54dvh] sm:max-h-[68dvh] max-w-full object-contain block" onload="updateLightboxOverlay()" />
         <div id="lightboxOverlay" class="absolute inset-0 pointer-events-none"></div>
       </div>
 
       <!-- Biometric Metrics Card -->
-      <div class="mt-3 w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 backdrop-blur-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-white">
-        <div>
-          <div class="flex items-center gap-2">
-            <h2 id="lightboxTitle" class="text-sm font-semibold truncate max-w-xs sm:max-w-md"></h2>
-            <span id="lightboxBadge" class="text-[10px] px-2 py-0.5 rounded-full font-mono border"></span>
+      <div class="mt-2.5 sm:mt-3 w-full theme-panel border rounded-xl p-3.5 sm:p-4 shadow-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 id="lightboxTitle" class="text-sm font-bold font-mono theme-text-primary truncate"></h2>
+            <span id="lightboxBadge" class="text-xs px-2.5 py-0.5 rounded-lg font-semibold"></span>
           </div>
-          <div id="lightboxBiometrics" class="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 mt-1 font-mono">
+          <div id="lightboxBiometrics" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs theme-text-secondary mt-1.5 font-mono">
             <!-- Dynamic biometric metrics injected here -->
           </div>
         </div>
         
-        <div class="flex items-center gap-2 shrink-0">
-          <a id="lightboxDriveLink" href="" target="_blank" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-medium transition-colors">
+        <div class="grid grid-cols-2 sm:flex items-center gap-2 shrink-0">
+          <a id="lightboxDriveLink" href="" target="_blank" rel="noopener" class="min-h-[44px] px-3.5 py-2 rounded-lg border theme-subtle theme-text-primary text-xs font-semibold flex items-center justify-center">
             Google Drive
           </a>
-          <a id="lightboxDownloadLink" href="" target="_blank" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-medium transition-colors">
+          <a id="lightboxDownloadLink" href="" target="_blank" rel="noopener" class="min-h-[44px] px-3.5 py-2 rounded-lg btn-primary text-xs font-semibold flex items-center justify-center">
             Download RAW
           </a>
         </div>
@@ -397,9 +584,47 @@
     let eventSource = null;
     let currentMatches = [];
     let currentLightboxIdx = 0;
-    let selectedFiles = []; // Array of File objects
-    let showBiometricHUD = true; // Toggle state for biometric overlays
+    let selectedFiles = [];
+    let showBiometricHUD = true;
     let webcamStream = null;
+
+    // --- Theme Toggle (R-21, R-34) ---
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      const label = document.getElementById('themeToggleLabel');
+      if (label) {
+        label.textContent = theme === 'dark' ? 'Light Theme' : 'Dark Theme';
+      }
+      try {
+        localStorage.setItem('gdrive_face_finder_theme', theme);
+      } catch (e) {}
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      applyTheme(current === 'dark' ? 'light' : 'dark');
+    }
+
+    (function initTheme() {
+      let saved = 'dark';
+      try {
+        saved = localStorage.getItem('gdrive_face_finder_theme') || 'dark';
+      } catch (e) {}
+      applyTheme(saved);
+    })();
+
+    // --- Inline Status Banner (R-27) ---
+    function showStatusBanner(title, message) {
+      const banner = document.getElementById('statusBanner');
+      document.getElementById('statusBannerTitle').textContent = title;
+      document.getElementById('statusBannerMessage').textContent = message;
+      banner.classList.remove('hidden');
+      banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function hideStatusBanner() {
+      document.getElementById('statusBanner').classList.add('hidden');
+    }
 
     // Initialize engine parameters from backend
     async function loadEngineInfo() {
@@ -407,11 +632,11 @@
         const res = await fetch('/api/info');
         const data = await res.json();
         if (data.is_arcface) {
-          document.getElementById('engineBadge').textContent = 'YuNet + ArcFace 512-d Biometrics';
+          document.getElementById('engineBadge').textContent = 'YuNet + ArcFace 512-d';
           const slider = document.getElementById('thresholdSlider');
           slider.min = data.min_threshold;
           slider.max = data.max_threshold;
-          slider.step = "0.02";
+          slider.step = "0.01";
           slider.value = data.default_threshold;
           updateToleranceLabel(data.default_threshold);
         }
@@ -423,27 +648,24 @@
 
     function updateToleranceLabel(val) {
       const v = parseFloat(val);
-      let desc = "(Balanced — Primary Action Shots)";
-      if (v < 0.36) desc = "(High Recall — Includes Background Shots)";
-      else if (v > 0.50) desc = "(Strict — Studio Precision)";
+      let desc = "(Balanced: Primary Action Shots)";
+      if (v < 0.36) desc = "(Full Recall: Primary + Background)";
+      else if (v > 0.50) desc = "(Strict: Close-Up Portraits)";
       document.getElementById('toleranceLabel').textContent = `${v.toFixed(2)} ${desc}`;
     }
 
     function toggleBiometricHUD() {
       showBiometricHUD = !showBiometricHUD;
       const text = document.getElementById('hudToggleText');
-      const dot = document.getElementById('hudToggleDot');
       const btn = document.getElementById('hudToggleBtn');
 
       if (showBiometricHUD) {
         text.textContent = 'Biometric HUD: ON';
-        dot.className = 'w-2 h-2 rounded-full bg-cyan-400 animate-pulse';
-        btn.className = 'px-3 py-1.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-medium flex items-center gap-2 transition-all shadow-sm';
+        btn.className = 'w-full sm:w-auto min-h-[44px] px-3.5 py-2 rounded-lg border badge-secondary text-xs font-semibold flex items-center justify-center gap-2 transition-colors';
         document.querySelectorAll('.biometric-layer').forEach(el => el.classList.remove('hidden'));
       } else {
         text.textContent = 'Biometric HUD: OFF';
-        dot.className = 'w-2 h-2 rounded-full bg-slate-500';
-        btn.className = 'px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-400 text-xs font-medium flex items-center gap-2 transition-all shadow-sm';
+        btn.className = 'w-full sm:w-auto min-h-[44px] px-3.5 py-2 rounded-lg border theme-subtle theme-text-secondary text-xs font-semibold flex items-center justify-center gap-2 transition-colors';
         document.querySelectorAll('.biometric-layer').forEach(el => el.classList.add('hidden'));
       }
       updateLightboxOverlay();
@@ -452,6 +674,7 @@
     // --- Webcam Biometric Scanner Functions ---
     async function openWebcamModal(event) {
       if (event) event.stopPropagation();
+      hideStatusBanner();
       const modal = document.getElementById('webcamModal');
       const video = document.getElementById('webcamVideo');
       modal.classList.remove('hidden');
@@ -463,8 +686,11 @@
         });
         video.srcObject = webcamStream;
       } catch (err) {
-        alert('Could not access webcam: ' + err.message);
         closeWebcamModal();
+        showStatusBanner(
+          'Webcam access unavailable',
+          'Could not access your camera (' + err.message + '). Please grant camera permission in your browser or upload reference photos from disk.'
+        );
       }
     }
 
@@ -486,7 +712,6 @@
 
       if (!video || !video.videoWidth) return;
 
-      // Trigger capture flash effect
       flash.classList.remove('opacity-0');
       flash.classList.add('opacity-80');
       setTimeout(() => {
@@ -497,7 +722,6 @@
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
-      // Flip horizontally to match selfie view
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -519,6 +743,7 @@
     function handleFileSelect(event) {
       const files = Array.from(event.target.files);
       if (!files.length) return;
+      hideStatusBanner();
 
       for (const f of files) {
         if (selectedFiles.length >= 5) break;
@@ -552,21 +777,22 @@
 
       selectedFiles.forEach((file, idx) => {
         const card = document.createElement('div');
-        card.className = "relative aspect-square rounded-xl bg-slate-900 border border-slate-700/80 overflow-hidden group shadow-md";
+        card.className = "relative aspect-square rounded-lg theme-panel border overflow-hidden group";
         
         const img = document.createElement('img');
         img.className = "w-full h-full object-cover";
+        img.alt = `Selected reference photo ${idx + 1}`;
         img.src = URL.createObjectURL(file);
         
         const removeBtn = document.createElement('button');
         removeBtn.type = "button";
-        removeBtn.className = "absolute top-1.5 right-1.5 p-1 rounded-md bg-black/70 text-white hover:bg-red-600 transition-colors";
-        removeBtn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>`;
+        removeBtn.setAttribute('aria-label', `Remove reference photo ${idx + 1}`);
+        removeBtn.className = "min-w-[44px] min-h-[44px] absolute top-1.5 right-1.5 p-2 rounded-lg bg-black/80 text-white hover:bg-red-600 flex items-center justify-center transition-colors";
+        removeBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>`;
         removeBtn.onclick = (e) => removeFile(idx, e);
 
-        // Biometric Verified Tag
         const tag = document.createElement('div');
-        tag.className = "absolute bottom-1 left-1 px-1.5 py-0.2 rounded bg-black/75 text-[9px] font-mono text-cyan-300 backdrop-blur-xs";
+        tag.className = "absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded-lg bg-black/80 text-xs font-mono text-white";
         tag.textContent = `Ref #${idx + 1}`;
 
         card.appendChild(img);
@@ -575,17 +801,17 @@
         tray.appendChild(card);
       });
 
-      // If under limit, append an "Add More" tile
       if (selectedFiles.length < 5) {
-        const addCard = document.createElement('div');
-        addCard.className = "aspect-square rounded-xl border border-dashed border-slate-700 hover:border-cyan-500 bg-slate-900/40 hover:bg-slate-900 flex flex-col items-center justify-center cursor-pointer transition-colors text-slate-400 hover:text-white";
+        const addCard = document.createElement('button');
+        addCard.type = "button";
+        addCard.className = "aspect-square min-h-[44px] rounded-lg border border-dashed theme-border theme-panel flex flex-col items-center justify-center cursor-pointer transition-colors theme-text-secondary hover:opacity-90";
         addCard.onclick = (e) => {
           e.stopPropagation();
           document.getElementById('refInput').click();
         };
         addCard.innerHTML = `
           <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          <span class="text-[10px] font-medium">+ Add Photo</span>
+          <span class="text-xs font-semibold">Add Photo</span>
         `;
         tray.appendChild(addCard);
       }
@@ -596,13 +822,13 @@
     ['dragenter', 'dragover'].forEach(name => {
       dropzone.addEventListener(name, (e) => {
         e.preventDefault();
-        dropzone.classList.add('border-cyan-500', 'bg-slate-900/90');
+        dropzone.classList.add('border-sky-500');
       });
     });
     ['dragleave', 'drop'].forEach(name => {
       dropzone.addEventListener(name, (e) => {
         e.preventDefault();
-        dropzone.classList.remove('border-cyan-500', 'bg-slate-900/90');
+        dropzone.classList.remove('border-sky-500');
       });
     });
     dropzone.addEventListener('drop', (e) => {
@@ -620,19 +846,21 @@
     // --- Submission and Progress Handling ---
     async function handleScanSubmit(event) {
       event.preventDefault();
+      hideStatusBanner();
       
       const folderUrlInput = document.getElementById('folderUrl');
       const thresholdSlider = document.getElementById('thresholdSlider');
       
       const folderUrl = folderUrlInput.value.trim();
       if (!folderUrl) {
-        alert('Please enter a Google Drive Folder URL.');
+        showStatusBanner('Missing Google Drive Folder URL', 'Please paste a public Google Drive folder link in Step 2 before starting the scan.');
         folderUrlInput.focus();
         return;
       }
       
       if (selectedFiles.length === 0) {
-        alert('Please select or capture at least one reference photo.');
+        showStatusBanner('No Reference Photos Selected', 'Please select 1 to 5 reference photos in Step 1 or capture a webcam selfie before scanning.');
+        document.getElementById('dropzone').focus();
         return;
       }
       
@@ -647,8 +875,9 @@
       const submitBtn = document.getElementById('submitBtn');
       submitBtn.disabled = true;
       submitBtn.classList.add('opacity-75');
-      submitBtn.innerHTML = `<span class="animate-spin mr-2">⚙</span> Extracting ArcFace 512-d Biometrics...`;
+      submitBtn.innerHTML = `<span>Extracting ArcFace 512-d Embeddings...</span>`;
       
+      document.getElementById('emptyStateSection').classList.add('hidden');
       document.getElementById('progressSection').classList.remove('hidden');
       document.getElementById('resultsSection').classList.add('hidden');
       document.getElementById('progressBar').style.width = '0%';
@@ -663,10 +892,8 @@
         currentJobId = data.job_id;
         startProgressStream(currentJobId);
       } catch (err) {
-        alert(err.message);
-        submitBtn.disabled = false;
-        submitBtn.classList.remove('opacity-75');
-        submitBtn.innerHTML = `<span>Scan Album for Matches</span>`;
+        showStatusBanner('Scan Request Failed', err.message);
+        resetSubmitBtn();
       }
     }
 
@@ -696,7 +923,7 @@
           finishScan(jobId);
         } else if (data.status === 'error') {
           eventSource.close();
-          alert('Error during scan: ' + (data.error || 'Unknown error'));
+          showStatusBanner('Scan Interrupted', data.error || 'An error occurred while scanning the Google Drive folder.');
           resetSubmitBtn();
         }
       };
@@ -718,9 +945,11 @@
       };
       Object.keys(map).forEach(k => {
         if (k === cat) {
-          map[k].className = "px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-cyan-600 text-white shadow-md shadow-cyan-600/20 transition-all";
+          map[k].className = "w-full sm:w-auto min-h-[44px] px-4 py-2 rounded-lg text-xs font-semibold btn-primary transition-colors text-center";
+          map[k].setAttribute('aria-selected', 'true');
         } else {
-          map[k].className = "px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-all";
+          map[k].className = "w-full sm:w-auto min-h-[44px] px-4 py-2 rounded-lg text-xs font-semibold theme-panel border theme-text-secondary hover:opacity-90 transition-colors text-center";
+          map[k].setAttribute('aria-selected', 'false');
         }
       });
 
@@ -766,12 +995,13 @@
       document.getElementById('secondarySectionHeading').textContent = `Secondary / Background Appearances (${secondaryCount} Photos)`;
 
       document.getElementById('resultsHeading').textContent = `${currentMatches.length} Matching Photos Found`;
-      document.getElementById('resultsSubheading').textContent = `Found ${primaryCount} Primary Solo & Action Shots + ${secondaryCount} Secondary/Background Shots across ${data.total_photos || 108} album files.`;
+      document.getElementById('resultsSubheading').textContent = `Found ${primaryCount} Primary Solo & Action Shots and ${secondaryCount} Secondary/Background Shots across ${data.total_photos || 108} album files.`;
       if (currentJobId) {
         document.getElementById('downloadZipBtn').href = `/api/download-zip/${currentJobId}`;
       }
       
       setCategoryFilter('all');
+      document.getElementById('emptyStateSection').classList.add('hidden');
       document.getElementById('resultsSection').classList.remove('hidden');
       if (shouldScroll) {
         document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
@@ -800,30 +1030,86 @@
 
     function renderMatchesTable(matches) {
       const tbody = document.getElementById('matchesTableBody');
-      if (!tbody) return;
-      tbody.innerHTML = '';
+      const mobileList = document.getElementById('matchesMobileList');
+      if (tbody) tbody.innerHTML = '';
+      if (mobileList) mobileList.innerHTML = '';
+
       matches.forEach((m, idx) => {
         const isPrimary = isPrimaryMatch(m);
-        const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-800/40 transition-colors cursor-pointer";
-        tr.onclick = () => openLightboxByFilename(m.filename);
-        tr.innerHTML = `
-          <td class="py-3 px-3 text-slate-400">${idx + 1}</td>
-          <td class="py-3 px-3 font-semibold text-white">${m.filename}</td>
-          <td class="py-3 px-3">
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-sans font-semibold border ${isPrimary ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-blue-500/15 text-blue-300 border-blue-500/30'}">
-              ${isPrimary ? '★ Primary' : 'Secondary'}
-            </span>
-          </td>
-          <td class="py-3 px-3 text-slate-300">${m.faces_found}</td>
-          <td class="py-3 px-3 text-cyan-300 font-semibold">${m.similarity_score.toFixed(4)}</td>
-          <td class="py-3 px-3 text-right font-sans">
-            <a href="${m.drive_view_url}" target="_blank" onclick="event.stopPropagation()" class="text-cyan-400 hover:underline mr-2">View</a>
-            <span class="text-slate-600">•</span>
-            <a href="${m.drive_download_url}" target="_blank" onclick="event.stopPropagation()" class="text-emerald-400 hover:underline ml-2 font-semibold">Download RAW</a>
-          </td>
-        `;
-        tbody.appendChild(tr);
+
+        // 1. Mobile Reflow Card (< 768px, zero horizontal scroll, R-03)
+        if (mobileList) {
+          const mCard = document.createElement('div');
+          mCard.tabIndex = 0;
+          mCard.setAttribute('role', 'button');
+          mCard.setAttribute('aria-label', `Inspect ${m.filename}, similarity ${m.similarity_score.toFixed(4)}`);
+          mCard.className = "rounded-xl border theme-subtle p-3.5 space-y-3 cursor-pointer transition-colors";
+          mCard.onclick = () => openLightboxByFilename(m.filename);
+          mCard.onkeydown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openLightboxByFilename(m.filename);
+            }
+          };
+          mCard.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="font-mono text-xs theme-text-secondary">#${idx + 1}</span>
+                <span class="font-mono font-semibold text-xs theme-text-primary truncate">${m.filename}</span>
+              </div>
+              <span class="px-2.5 py-0.5 rounded-lg text-xs font-semibold shrink-0 ${isPrimary ? 'badge-primary' : 'badge-secondary'}">
+                ${isPrimary ? 'Primary' : 'Secondary'}
+              </span>
+            </div>
+            <div class="flex items-center justify-between text-xs font-mono theme-text-secondary">
+              <span>Faces: ${m.faces_found}</span>
+              <span class="font-semibold theme-text-primary">ArcFace Sim: ${m.similarity_score.toFixed(4)}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2.5 pt-1">
+              <a href="${m.drive_view_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="min-h-[44px] px-3 py-2 rounded-lg border theme-panel theme-text-primary text-xs font-semibold flex items-center justify-center">
+                View on Drive
+              </a>
+              <a href="${m.drive_download_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="min-h-[44px] px-3 py-2 rounded-lg btn-primary text-xs font-semibold flex items-center justify-center">
+                Download RAW
+              </a>
+            </div>
+          `;
+          mobileList.appendChild(mCard);
+        }
+
+        // 2. Tablet & Desktop Table Row (768px+, R-03)
+        if (tbody) {
+          const tr = document.createElement('tr');
+          tr.tabIndex = 0;
+          tr.setAttribute('role', 'button');
+          tr.setAttribute('aria-label', `Inspect ${m.filename}, similarity ${m.similarity_score.toFixed(4)}`);
+          tr.className = "hover:opacity-90 transition-colors cursor-pointer";
+          tr.onclick = () => openLightboxByFilename(m.filename);
+          tr.onkeydown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openLightboxByFilename(m.filename);
+            }
+          };
+          tr.innerHTML = `
+            <td class="py-3 px-3 font-mono theme-text-secondary">${idx + 1}</td>
+            <td class="py-3 px-3 font-mono font-semibold theme-text-primary">${m.filename}</td>
+            <td class="py-3 px-3">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-semibold ${isPrimary ? 'badge-primary' : 'badge-secondary'}">
+                ${isPrimary ? 'Primary' : 'Secondary'}
+              </span>
+            </td>
+            <td class="py-3 px-3 font-mono theme-text-secondary">${m.faces_found}</td>
+            <td class="py-3 px-3 font-mono font-semibold theme-text-primary">${m.similarity_score.toFixed(4)}</td>
+            <td class="py-3 px-3 text-right">
+              <div class="inline-flex items-center gap-2">
+                <a href="${m.drive_view_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="min-h-[44px] px-3 py-2 rounded-lg border theme-subtle theme-text-primary font-semibold inline-flex items-center">View</a>
+                <a href="${m.drive_download_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="min-h-[44px] px-3 py-2 rounded-lg btn-primary font-semibold inline-flex items-center">Download RAW</a>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        }
       });
     }
 
@@ -842,18 +1128,19 @@
       grid.innerHTML = '';
       
       if (matches.length === 0) {
-        grid.innerHTML = `<div class="col-span-full text-center py-8 text-slate-500 text-xs">No photos in this category.</div>`;
+        grid.innerHTML = `
+          <div class="col-span-full rounded-xl border theme-subtle p-6 text-center space-y-2">
+            <p class="text-sm font-semibold theme-text-primary">No Photos in This Category</p>
+            <p class="text-xs theme-text-secondary">Lower the ArcFace Cosine Threshold slider to 0.33 and re-run the scan to include wider-angle shots.</p>
+          </div>
+        `;
         return;
       }
       
       matches.forEach((m) => {
         const isPrimary = isPrimaryMatch(m);
-        let badgeColor = isPrimary
-          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-          : 'bg-blue-500/20 text-blue-300 border-blue-500/30';
-        let badgeText = isPrimary ? '★ Primary Action' : 'Secondary / Background';
+        const badgeText = isPrimary ? 'Primary Action' : 'Secondary / Background';
 
-        // Generate SVG or HTML Biometric overlay for each detected face
         const imgW = m.image_width || 1000;
         const imgH = m.image_height || 667;
         let biometricsHtml = '';
@@ -866,24 +1153,23 @@
             const heightPct = (b.box.height / imgH) * 100;
 
             const boxBorder = b.is_match 
-              ? 'border-cyan-400 bg-cyan-400/10 shadow-[0_0_12px_rgba(34,211,238,0.5)]' 
-              : 'border-slate-500/50 bg-slate-500/5';
+              ? 'border-sky-400 bg-sky-500/10' 
+              : 'border-slate-400/50';
             
-            // 5 Landmark Dots (Eyes = Cyan, Nose = Amber, Mouth = Emerald)
             let landmarkDots = '';
             if (b.landmarks) {
               const lm = b.landmarks;
-              if (lm.left_eye) landmarkDots += `<div style="top: ${(lm.left_eye[1]/imgH)*100}%; left: ${(lm.left_eye[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-cyan-400 shadow-[0_0_5px_#22d3ee]"></div>`;
-              if (lm.right_eye) landmarkDots += `<div style="top: ${(lm.right_eye[1]/imgH)*100}%; left: ${(lm.right_eye[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-cyan-400 shadow-[0_0_5px_#22d3ee]"></div>`;
-              if (lm.nose_tip) landmarkDots += `<div style="top: ${(lm.nose_tip[1]/imgH)*100}%; left: ${(lm.nose_tip[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-amber-400 shadow-[0_0_5px_#fbbf24]"></div>`;
-              if (lm.left_mouth) landmarkDots += `<div style="top: ${(lm.left_mouth[1]/imgH)*100}%; left: ${(lm.left_mouth[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-emerald-400 shadow-[0_0_5px_#34d399]"></div>`;
-              if (lm.right_mouth) landmarkDots += `<div style="top: ${(lm.right_mouth[1]/imgH)*100}%; left: ${(lm.right_mouth[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-emerald-400 shadow-[0_0_5px_#34d399]"></div>`;
+              if (lm.left_eye) landmarkDots += `<div style="top: ${(lm.left_eye[1]/imgH)*100}%; left: ${(lm.left_eye[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-sky-400 border border-black"></div>`;
+              if (lm.right_eye) landmarkDots += `<div style="top: ${(lm.right_eye[1]/imgH)*100}%; left: ${(lm.right_eye[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-sky-400 border border-black"></div>`;
+              if (lm.nose_tip) landmarkDots += `<div style="top: ${(lm.nose_tip[1]/imgH)*100}%; left: ${(lm.nose_tip[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-white border border-black"></div>`;
+              if (lm.left_mouth) landmarkDots += `<div style="top: ${(lm.left_mouth[1]/imgH)*100}%; left: ${(lm.left_mouth[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-emerald-400 border border-black"></div>`;
+              if (lm.right_mouth) landmarkDots += `<div style="top: ${(lm.right_mouth[1]/imgH)*100}%; left: ${(lm.right_mouth[0]/imgW)*100}%;" class="absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-emerald-400 border border-black"></div>`;
             }
 
             biometricsHtml += `
               <div style="top: ${topPct}%; left: ${leftPct}%; width: ${widthPct}%; height: ${heightPct}%;" 
-                   class="absolute border-2 ${boxBorder} rounded-lg pointer-events-none transition-all">
-                ${b.is_match ? `<span class="absolute -top-5 left-0 px-1 py-0.2 rounded bg-black/80 font-mono text-[9px] text-cyan-300 font-semibold whitespace-nowrap">${b.similarity_pct}%</span>` : ''}
+                   class="absolute border-2 ${boxBorder} rounded-lg pointer-events-none">
+                ${b.is_match ? `<span class="absolute -top-5 left-0 px-1.5 py-0.5 rounded-lg bg-slate-950 text-white font-mono text-xs font-semibold whitespace-nowrap">${b.similarity_pct}%</span>` : ''}
               </div>
               ${landmarkDots}
             `;
@@ -891,10 +1177,19 @@
         }
 
         const card = document.createElement('div');
-        card.className = "group relative rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-lg hover:shadow-2xl transition-all cursor-pointer flex flex-col";
+        card.tabIndex = 0;
+        card.setAttribute('role', 'button');
+        card.setAttribute('aria-label', `Inspect ${m.filename}, similarity ${m.similarity_score.toFixed(4)}`);
+        card.className = "group relative rounded-xl theme-panel border overflow-hidden cursor-pointer flex flex-col transition-colors";
         card.onclick = () => openLightboxByFilename(m.filename);
+        card.onkeydown = (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openLightboxByFilename(m.filename);
+          }
+        };
         card.innerHTML = `
-          <div class="aspect-[4/3] w-full overflow-hidden bg-black/40 relative">
+          <div class="aspect-[4/3] w-full overflow-hidden bg-slate-950 relative">
             <img src="${m.preview_url}" alt="${m.filename}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
             
             <!-- Biometric Overlay Layer -->
@@ -902,27 +1197,26 @@
               ${biometricsHtml}
             </div>
 
-            <!-- Top Left Match Pill -->
-            <div class="absolute top-3 left-3 px-2.5 py-1 rounded-md text-[11px] font-semibold backdrop-blur-md border ${badgeColor} flex items-center gap-1.5 shadow-md">
-              <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+            <!-- Top Left Match Tag -->
+            <div class="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-950/90 text-white border border-slate-700">
               <span>${m.similarity_pct}% (${badgeText})</span>
             </div>
 
             <!-- Bottom Right Metric -->
-            <div class="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[10px] font-mono bg-black/70 text-cyan-300 backdrop-blur-sm border border-cyan-500/20">
+            <div class="absolute bottom-2 right-2 px-2 py-0.5 rounded-lg text-xs font-mono bg-slate-950/90 text-sky-300 border border-slate-700">
               Sim: ${m.similarity_score.toFixed(3)}
             </div>
           </div>
-          <div class="p-4 flex items-center justify-between mt-auto">
-            <span class="font-semibold text-xs text-white truncate max-w-[150px]">${m.filename}</span>
-            <div class="flex items-center gap-1.5">
-              <a href="${m.drive_view_url}" target="_blank" onclick="event.stopPropagation()" title="View on Google Drive"
-                 class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          <div class="p-3.5 flex items-center justify-between gap-2.5 mt-auto">
+            <span class="font-mono font-semibold text-xs theme-text-primary truncate min-w-0">${m.filename}</span>
+            <div class="flex items-center gap-2 shrink-0">
+              <a href="${m.drive_view_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="View ${m.filename} on Google Drive" title="View on Google Drive"
+                 class="min-w-[44px] min-h-[44px] p-2.5 rounded-lg border theme-subtle theme-text-primary flex items-center justify-center transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
               </a>
-              <a href="${m.drive_download_url}" target="_blank" onclick="event.stopPropagation()" title="Download Full-Res Original"
-                 class="p-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white transition-colors">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              <a href="${m.drive_download_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Download full-resolution ${m.filename}" title="Download Full-Res Original"
+                 class="min-w-[44px] min-h-[44px] p-2.5 rounded-lg btn-primary flex items-center justify-center transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
               </a>
             </div>
           </div>
@@ -936,7 +1230,7 @@
       submitBtn.disabled = false;
       submitBtn.classList.remove('opacity-75');
       submitBtn.innerHTML = `
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         <span>Scan Album for Matches</span>
       `;
     }
@@ -952,25 +1246,24 @@
       document.getElementById('lightboxTitle').textContent = m.filename;
       
       const badge = document.getElementById('lightboxBadge');
-      if (m.similarity_score >= 0.44) {
-        badge.className = 'text-[10px] px-2 py-0.5 rounded-full font-mono border bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-        badge.textContent = `★ Primary Action (${m.similarity_pct}%)`;
+      if (isPrimaryMatch(m)) {
+        badge.className = 'text-xs px-2.5 py-0.5 rounded-lg font-semibold badge-primary';
+        badge.textContent = `Primary Action (${m.similarity_pct}%)`;
       } else {
-        badge.className = 'text-[10px] px-2 py-0.5 rounded-full font-mono border bg-blue-500/20 text-blue-300 border-blue-500/30';
+        badge.className = 'text-xs px-2.5 py-0.5 rounded-lg font-semibold badge-secondary';
         badge.textContent = `Secondary Match (${m.similarity_pct}%)`;
       }
 
-      // Generate Biometric Breakdown pills
       const bioDiv = document.getElementById('lightboxBiometrics');
       const bestBio = (m.biometrics && m.biometrics.length > 0) ? m.biometrics.find(b => b.is_match) || m.biometrics[0] : null;
 
-      let bioPills = `<span>• Photo ${index + 1} of ${activeList.length}</span>`;
-      bioPills += `<span class="text-cyan-300 font-semibold">ArcFace Sim: ${m.similarity_score.toFixed(4)}</span>`;
+      let bioPills = `<span>Photo ${index + 1} of ${activeList.length}</span>`;
+      bioPills += `<span class="font-semibold theme-text-primary">ArcFace Sim: ${m.similarity_score.toFixed(4)}</span>`;
       if (bestBio) {
         bioPills += `<span>Confidence: ${(bestBio.confidence * 100).toFixed(1)}%</span>`;
         if (bestBio.ipd_px) bioPills += `<span>IPD: ${bestBio.ipd_px}px</span>`;
-        if (bestBio.roll_deg !== undefined) bioPills += `<span>Roll: ${bestBio.roll_deg}°</span>`;
-        bioPills += `<span class="text-emerald-400">5-Point Landmarks: OK</span>`;
+        if (bestBio.roll_deg !== undefined) bioPills += `<span>Roll: ${bestBio.roll_deg} deg</span>`;
+        bioPills += `<span>5-Point Landmarks: Verified</span>`;
       }
       bioDiv.innerHTML = bioPills;
 
@@ -991,13 +1284,11 @@
       const img = document.getElementById('lightboxImg');
       if (!m || !m.biometrics || !img.naturalWidth || !img.clientWidth) return;
 
-      // Compute exact rendered image bounding box inside stage
       const displayedWidth = img.clientWidth;
       const displayedHeight = img.clientHeight;
       const naturalWidth = m.image_width || img.naturalWidth;
       const naturalHeight = m.image_height || img.naturalHeight;
 
-      // Center offset
       const stage = document.getElementById('lightboxStage');
       const offsetX = (stage.clientWidth - displayedWidth) / 2;
       const offsetY = (stage.clientHeight - displayedHeight) / 2;
@@ -1010,24 +1301,23 @@
         const height = (b.box.height / naturalHeight) * displayedHeight;
 
         const boxBorder = b.is_match 
-          ? 'border-cyan-400 bg-cyan-400/10 shadow-[0_0_15px_rgba(34,211,238,0.5)]' 
-          : 'border-slate-500/40 bg-slate-500/5';
+          ? 'border-sky-400 bg-sky-500/10' 
+          : 'border-slate-400/40';
 
-        // 5 Landmarks
         let dots = '';
         if (b.landmarks) {
           const lm = b.landmarks;
-          if (lm.left_eye) dots += `<div style="top: ${offsetY + (lm.left_eye[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.left_eye[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-cyan-400 shadow-[0_0_6px_#22d3ee]"></div>`;
-          if (lm.right_eye) dots += `<div style="top: ${offsetY + (lm.right_eye[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.right_eye[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-cyan-400 shadow-[0_0_6px_#22d3ee]"></div>`;
-          if (lm.nose_tip) dots += `<div style="top: ${offsetY + (lm.nose_tip[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.nose_tip[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]"></div>`;
-          if (lm.left_mouth) dots += `<div style="top: ${offsetY + (lm.left_mouth[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.left_mouth[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></div>`;
-          if (lm.right_mouth) dots += `<div style="top: ${offsetY + (lm.right_mouth[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.right_mouth[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></div>`;
+          if (lm.left_eye) dots += `<div style="top: ${offsetY + (lm.left_eye[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.left_eye[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-sky-400 border border-black"></div>`;
+          if (lm.right_eye) dots += `<div style="top: ${offsetY + (lm.right_eye[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.right_eye[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-sky-400 border border-black"></div>`;
+          if (lm.nose_tip) dots += `<div style="top: ${offsetY + (lm.nose_tip[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.nose_tip[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-white border border-black"></div>`;
+          if (lm.left_mouth) dots += `<div style="top: ${offsetY + (lm.left_mouth[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.left_mouth[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-emerald-400 border border-black"></div>`;
+          if (lm.right_mouth) dots += `<div style="top: ${offsetY + (lm.right_mouth[1]/naturalHeight)*displayedHeight}px; left: ${offsetX + (lm.right_mouth[0]/naturalWidth)*displayedWidth}px;" class="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-emerald-400 border border-black"></div>`;
         }
 
         html += `
           <div style="top: ${top}px; left: ${left}px; width: ${width}px; height: ${height}px;"
                class="absolute border-2 ${boxBorder} rounded-lg pointer-events-none">
-            ${b.is_match ? `<span class="absolute -top-6 left-0 px-2 py-0.5 rounded bg-black/85 text-[10px] font-mono font-semibold text-cyan-300 whitespace-nowrap shadow-md">${b.similarity_pct}% (IPD: ${b.ipd_px}px)</span>` : ''}
+            ${b.is_match ? `<span class="absolute -top-6 left-0 px-2 py-0.5 rounded-lg bg-slate-950 text-xs font-mono font-semibold text-white whitespace-nowrap">${b.similarity_pct}% (IPD: ${b.ipd_px}px)</span>` : ''}
           </div>
           ${dots}
         `;
@@ -1061,6 +1351,11 @@
     }
 
     window.addEventListener('keydown', (e) => {
+      const webcamModal = document.getElementById('webcamModal');
+      if (!webcamModal.classList.contains('hidden') && e.key === 'Escape') {
+        closeWebcamModal();
+        return;
+      }
       const lb = document.getElementById('lightbox');
       if (lb.classList.contains('hidden')) return;
       if (e.key === 'Escape') closeLightbox();
